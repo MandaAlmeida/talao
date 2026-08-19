@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: talao
+      POSTGRES_PASSWORD: talao
+      POSTGRES_DB: talao
+    ports:
+      - "5433:5432"
+    volumes:
+      - talao_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  talao_postgres_data:
