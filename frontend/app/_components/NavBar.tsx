@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { logout, papelLabel, type Papel } from "../_lib/auth-store";
 import { useUsuario } from "../_lib/use-auth";
+import { useTema } from "../_lib/use-tema";
+import { alternarTema } from "../_lib/theme-store";
 
 const linksPublicos = [{ href: "/", label: "Início" }];
 
@@ -21,6 +23,7 @@ export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const usuario = useUsuario();
+  const tema = useTema();
   const [menuAberto, setMenuAberto] = useState(false);
 
   const links = [
@@ -35,7 +38,7 @@ export default function NavBar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black">
+    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#111111]">
       <div className="flex h-16 w-full items-center justify-between px-4 lg:px-28">
         <Link
           href="/"
@@ -99,8 +102,18 @@ export default function NavBar() {
               </Link>
             </>
           )}
-        </div>
 
+          <button
+            type="button"
+            onClick={alternarTema}
+            aria-label={
+              tema === "dark" ? "Ativar modo claro" : "Ativar modo escuro"
+            }
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            {tema === "dark" ? <SolIcon /> : <LuaIcon />}
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => setMenuAberto((v) => !v)}
@@ -113,7 +126,7 @@ export default function NavBar() {
       </div>
 
       {menuAberto && (
-        <nav className="flex flex-col gap-1 border-t border-zinc-200 bg-white px-4 py-3 md:hidden dark:border-zinc-800 dark:bg-black">
+        <nav className="flex flex-col gap-1 border-t border-zinc-200 bg-white px-4 py-3 md:hidden dark:border-zinc-800 dark:bg-[#111111]">
           {links.map((link) => {
             const isActive =
               link.href === "/"
@@ -135,6 +148,15 @@ export default function NavBar() {
             );
           })}
           <div className="mt-2 flex flex-col gap-2 border-t border-zinc-200 pt-2 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={alternarTema}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-500 dark:text-zinc-400"
+            >
+              {tema === "dark" ? <SolIcon /> : <LuaIcon />}
+              {tema === "dark" ? "Modo claro" : "Modo escuro"}
+            </button>
+
             {usuario ? (
               <>
                 <span className="px-3 text-sm text-zinc-500 dark:text-zinc-400">
@@ -203,6 +225,41 @@ function CloseIcon() {
       className="h-6 w-6"
     >
       <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function SolIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+    </svg>
+  );
+}
+
+function LuaIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
     </svg>
   );
 }

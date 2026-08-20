@@ -7,7 +7,10 @@ import BookingStatusBadge from "../../_components/BookingStatusBadge";
 import QRCodeDisplay from "../../_components/QRCodeDisplay";
 import RequireRole from "../../_components/RequireRole";
 import { ApiError } from "../../_lib/api-client";
-import { buscarBookingDetalhado, type BookingDetalhado } from "../../_lib/bookings-store";
+import {
+  buscarBookingDetalhado,
+  type BookingDetalhado,
+} from "../../_lib/bookings-store";
 import { formatarDataEvento } from "../../_lib/eventos";
 
 type Estado =
@@ -41,8 +44,10 @@ function ConteudoDetalheIngresso() {
   if (estado.status === "erro") notFound();
   if (estado.status === "carregando") {
     return (
-      <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-black">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Carregando ingresso…</p>
+      <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-[#111111]">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Carregando ingresso…
+        </p>
       </div>
     );
   }
@@ -51,7 +56,7 @@ function ConteudoDetalheIngresso() {
   const podeApresentar = booking.status === "CONFIRMADO";
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-[#111111]">
       <main className="w-full max-w-md px-4 py-10">
         <Link
           href="/meus-ingressos"
@@ -68,7 +73,9 @@ function ConteudoDetalheIngresso() {
               {booking.evento.titulo}
             </h1>
             <p className="mt-0.5 text-xs text-white/90">
-              {formatarDataEvento(booking.evento.dataInicio)} a {formatarDataEvento(booking.evento.dataFim)} · {booking.evento.cidade}
+              {formatarDataEvento(booking.evento.dataInicio)} a{" "}
+              {formatarDataEvento(booking.evento.dataFim)} ·{" "}
+              {booking.evento.cidade}
             </p>
           </div>
 

@@ -44,7 +44,9 @@ export default function Select<T extends string>({
 
   useEffect(() => {
     if (!aberto) return;
-    const item = listaRef.current?.children[indiceAtivo] as HTMLElement | undefined;
+    const item = listaRef.current?.children[indiceAtivo] as
+      | HTMLElement
+      | undefined;
     item?.scrollIntoView({ block: "nearest" });
   }, [aberto, indiceAtivo]);
 
@@ -55,7 +57,12 @@ export default function Select<T extends string>({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!aberto) {
-      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (
+        e.key === "Enter" ||
+        e.key === " " ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowUp"
+      ) {
         e.preventDefault();
         abrir();
       }
@@ -88,7 +95,7 @@ export default function Select<T extends string>({
         aria-controls={listaId}
         onClick={() => (aberto ? setAberto(false) : abrir())}
         onKeyDown={handleKeyDown}
-        className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-left text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-left text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-gray-900 dark:text-zinc-50"
       >
         <span className="truncate">{opcaoSelecionada?.label ?? ""}</span>
         <ChevronIcon aberto={aberto} />

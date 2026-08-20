@@ -23,7 +23,9 @@ function podeCancelar(booking: BookingDetalhado, agora: number): boolean {
 function ConteudoMeusIngressos() {
   const [bookings, setBookings] = useState<BookingDetalhado[] | null>(null);
   const [erro, setErro] = useState("");
-  const [bookingParaCancelar, setBookingParaCancelar] = useState<string | null>(null);
+  const [bookingParaCancelar, setBookingParaCancelar] = useState<string | null>(
+    null,
+  );
   const [cancelando, setCancelando] = useState(false);
   const [erroCancelamento, setErroCancelamento] = useState("");
   const [agora] = useState(() => Date.now());
@@ -65,7 +67,7 @@ function ConteudoMeusIngressos() {
   };
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-[#111111]">
       <main className="w-full max-w-3xl px-4 py-10">
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
           Meus ingressos
@@ -127,7 +129,8 @@ function ConteudoMeusIngressos() {
                   <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
                     <span>{booking.evento.cidade}</span>
                     <span>
-                      {formatarDataEvento(booking.evento.dataInicio)} a {formatarDataEvento(booking.evento.dataFim)}
+                      {formatarDataEvento(booking.evento.dataInicio)} a{" "}
+                      {formatarDataEvento(booking.evento.dataFim)}
                     </span>
                   </p>
                   <p className="mt-1.5 text-sm text-zinc-700 dark:text-zinc-300">

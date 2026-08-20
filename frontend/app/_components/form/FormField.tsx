@@ -27,7 +27,7 @@ export default function FormField({
 }
 
 export const inputClass =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
+  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-gray-900 dark:text-zinc-50";
 
 // O ícone nativo do seletor de data/hora (::-webkit-calendar-picker-indicator)
 // é escuro por padrão e fica invisível sobre o fundo escuro do dark mode —

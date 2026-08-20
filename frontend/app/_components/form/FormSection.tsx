@@ -8,7 +8,7 @@ export default function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="rounded-xl">
       <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
         {title}
       </h2>

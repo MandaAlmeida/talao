@@ -10,7 +10,7 @@ function ConteudoMeusEventos() {
   const meusEventos = useMeusEventos();
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-[#111111]">
       <main className="w-full max-w-5xl px-4 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -71,7 +71,21 @@ function ConteudoMeusEventos() {
                   <p className="mt-1 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                     <span>{evento.cidade}</span>
                     <span>
-                      {formatarDataEvento(evento.dataInicio)} a {formatarDataEvento(evento.dataFim)}
+                      {formatarDataEvento(evento.dataInicio)} a{" "}
+                      {formatarDataEvento(evento.dataFim)}
+                    </span>
+                  </p>
+                  <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                      {evento.totalVendidos} / {evento.totalCapacidade}{" "}
+                      ingressos vendidos
+                    </span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                      {evento.receitaTotal.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}{" "}
+                      arrecadados
                     </span>
                   </p>
                 </div>

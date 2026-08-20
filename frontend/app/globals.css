@@ -1,8 +1,27 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Paleta "zinc" redefinida em tons de azul royal — todo componente que já
+   usa as classes bg-zinc, text-zinc e border-zinc herda a nova cor
+   automaticamente, sem precisar editar cada arquivo. */
+@theme {
+  --color-zinc-50: #f4f6fd;
+  --color-zinc-100: #e6ebfb;
+  --color-zinc-200: #c9d5f5;
+  --color-zinc-300: #a3b6ee;
+  --color-zinc-400: #7690e4;
+  --color-zinc-500: #4169e1;
+  --color-zinc-600: #3355c4;
+  --color-zinc-700: #2a44a0;
+  --color-zinc-800: #24397f;
+  --color-zinc-900: #1f2f63;
+  --color-zinc-950: #141d40;
+}
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #141d40;
 }
 
 @theme inline {
@@ -12,11 +31,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0b1026;
+  --foreground: #e6ebfb;
 }
 
 body {

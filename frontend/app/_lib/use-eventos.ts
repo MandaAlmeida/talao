@@ -1,12 +1,16 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   buscarEventoPorId,
+  carregarEmBreve,
   carregarEventos,
   carregarMeusEventos,
+  getEmBreveServerSnapshot,
+  getEmBreveSnapshot,
   getEventosServerSnapshot,
   getEventosSnapshot,
   getMeusEventosServerSnapshot,
   getMeusEventosSnapshot,
+  subscribeEmBreve,
   subscribeEventos,
   subscribeMeusEventos,
 } from "./eventos-store";
@@ -22,6 +26,22 @@ export function useEventos() {
 
   useEffect(() => {
     carregarEventos().catch(() => {
+      // erro tratado via estado de carregamento nos componentes que precisam de feedback
+    });
+  }, []);
+
+  return eventos;
+}
+
+export function useEmBreve() {
+  const eventos = useSyncExternalStore(
+    subscribeEmBreve,
+    getEmBreveSnapshot,
+    getEmBreveServerSnapshot,
+  );
+
+  useEffect(() => {
+    carregarEmBreve().catch(() => {
       // erro tratado via estado de carregamento nos componentes que precisam de feedback
     });
   }, []);

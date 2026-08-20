@@ -44,7 +44,7 @@ export default function CameraQrScanner({
   if (!ativo) return null;
 
   return (
-    <div className="overflow-hidden rounded-xl bg-black">
+    <div className="overflow-hidden rounded-xl bg-[#111111]">
       {erro ? (
         <p className="p-6 text-center text-sm text-red-400">{erro}</p>
       ) : (
