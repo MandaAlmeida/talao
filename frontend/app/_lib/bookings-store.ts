@@ -73,3 +73,7 @@ export async function buscarMinhasBookings(): Promise<BookingDetalhado[]> {
 export async function buscarBookingDetalhado(id: string): Promise<BookingDetalhado> {
   return apiFetch<BookingDetalhado>(`/bookings/${id}`);
 }
+
+export async function cancelarBooking(id: string): Promise<Booking> {
+  return apiFetch<Booking>(`/bookings/${id}`, { method: "DELETE" });
+}

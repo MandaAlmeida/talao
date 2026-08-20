@@ -11,6 +11,12 @@ import {
 } from "../../_lib/auth-store";
 import FormField, { inputClass } from "./FormField";
 
+const destinoPorPapel: Record<Papel, string> = {
+  organizador: "/meus-eventos",
+  cliente: "/",
+  portaria: "/portaria",
+};
+
 export default function AuthForm({ modo }: { modo: "login" | "registro" }) {
   const router = useRouter();
   const [nome, setNome] = useState("");
@@ -42,12 +48,11 @@ export default function AuthForm({ modo }: { modo: "login" | "registro" }) {
 
     setCarregando(true);
     try {
-      if (modo === "login") {
-        await login(email.trim(), senha);
-      } else {
-        await registrar(nome.trim(), email.trim(), senha, papel);
-      }
-      router.push("/");
+      const usuario =
+        modo === "login"
+          ? await login(email.trim(), senha)
+          : await registrar(nome.trim(), email.trim(), senha, papel);
+      router.push(destinoPorPapel[usuario.papel]);
     } catch (err) {
       setErro(
         err instanceof ApiError

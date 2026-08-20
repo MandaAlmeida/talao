@@ -3,10 +3,19 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { logout, papelLabel } from "../_lib/auth-store";
+import { logout, papelLabel, type Papel } from "../_lib/auth-store";
 import { useUsuario } from "../_lib/use-auth";
 
 const linksPublicos = [{ href: "/", label: "Início" }];
+
+const linksPorPapel: Record<Papel, { href: string; label: string }[]> = {
+  organizador: [
+    { href: "/criar-evento", label: "Criar evento" },
+    { href: "/meus-eventos", label: "Meus eventos" },
+  ],
+  cliente: [{ href: "/meus-ingressos", label: "Meus ingressos" }],
+  portaria: [{ href: "/portaria", label: "Portaria" }],
+};
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -14,7 +23,10 @@ export default function NavBar() {
   const usuario = useUsuario();
   const [menuAberto, setMenuAberto] = useState(false);
 
-  const links = linksPublicos;
+  const links = [
+    ...linksPublicos,
+    ...(usuario ? linksPorPapel[usuario.papel] : []),
+  ];
 
   const handleLogout = () => {
     logout();

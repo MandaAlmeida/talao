@@ -3,14 +3,30 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import BookingStatusBadge from "../_components/BookingStatusBadge";
+import ConfirmModal from "../_components/ConfirmModal";
 import RequireRole from "../_components/RequireRole";
 import { ApiError } from "../_lib/api-client";
-import { buscarMinhasBookings, type BookingDetalhado } from "../_lib/bookings-store";
+import {
+  buscarMinhasBookings,
+  cancelarBooking,
+  type BookingDetalhado,
+} from "../_lib/bookings-store";
 import { formatarDataEvento } from "../_lib/eventos";
+
+function podeCancelar(booking: BookingDetalhado, agora: number): boolean {
+  return (
+    (booking.status === "CONFIRMADO" || booking.status === "PENDENTE") &&
+    new Date(booking.evento.dataInicio).getTime() > agora
+  );
+}
 
 function ConteudoMeusIngressos() {
   const [bookings, setBookings] = useState<BookingDetalhado[] | null>(null);
   const [erro, setErro] = useState("");
+  const [bookingParaCancelar, setBookingParaCancelar] = useState<string | null>(null);
+  const [cancelando, setCancelando] = useState(false);
+  const [erroCancelamento, setErroCancelamento] = useState("");
+  const [agora] = useState(() => Date.now());
 
   useEffect(() => {
     buscarMinhasBookings()
@@ -23,6 +39,30 @@ function ConteudoMeusIngressos() {
         );
       });
   }, []);
+
+  const confirmarCancelamento = async () => {
+    if (!bookingParaCancelar) return;
+    setCancelando(true);
+    setErroCancelamento("");
+    try {
+      await cancelarBooking(bookingParaCancelar);
+      setBookings(
+        (prev) =>
+          prev?.map((b) =>
+            b.id === bookingParaCancelar ? { ...b, status: "CANCELADO" } : b,
+          ) ?? null,
+      );
+      setBookingParaCancelar(null);
+    } catch (err) {
+      setErroCancelamento(
+        err instanceof ApiError
+          ? err.message
+          : "Não foi possível cancelar o ingresso. Tente novamente.",
+      );
+    } finally {
+      setCancelando(false);
+    }
+  };
 
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
@@ -37,6 +77,12 @@ function ConteudoMeusIngressos() {
         {erro && (
           <div className="mt-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
             {erro}
+          </div>
+        )}
+
+        {erroCancelamento && (
+          <div className="mt-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+            {erroCancelamento}
           </div>
         )}
 
@@ -106,12 +152,31 @@ function ConteudoMeusIngressos() {
                   >
                     Ver evento
                   </Link>
+                  {podeCancelar(booking, agora) && (
+                    <button
+                      type="button"
+                      onClick={() => setBookingParaCancelar(booking.id)}
+                      className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                    >
+                      Cancelar ingresso
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </main>
+
+      {bookingParaCancelar && (
+        <ConfirmModal
+          title="Cancelar ingresso"
+          description="Tem certeza que deseja cancelar este ingresso? Se o pagamento já foi confirmado, o valor será reembolsado automaticamente. Essa ação não pode ser desfeita."
+          confirmLabel={cancelando ? "Cancelando…" : "Sim, cancelar"}
+          onConfirm={() => void confirmarCancelamento()}
+          onCancel={() => setBookingParaCancelar(null)}
+        />
+      )}
     </div>
   );
 }
