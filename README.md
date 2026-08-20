@@ -2,7 +2,7 @@
 
 Um organizador publica eventos (shows ou peças, com poster vindo do catálogo do TMDb), um cliente reserva e paga (de forma simulada, via Stripe em modo de teste) e recebe um ingresso com QR code, e a portaria valida a entrada escaneando esse código.
 
-🔗 **Aplicação publicada:** [URL AQUI] <!-- TODO: colar o link da Vercel -->
+[🔗 **Aplicação publicada:** \[URL AQUI\] <!-- TODO: colar o link da Vercel -->](https://talao-ruddy.vercel.app/)
 
 <!-- TODO: adicionar screenshot ou GIF do fluxo aqui -->
 <!-- ![Demo do Talão](docs/demo.gif) -->
@@ -94,11 +94,7 @@ talao/
 - Rate limiting no login (proteção básica contra brute-force) e Swagger documentando toda a API.
 - Testes automatizados: unitários (mockados, cobrindo as regras de negócio mais sensíveis — estoque, concorrência de assento, validação de QR, cancelamento/reembolso) e um e2e ponta a ponta contra um Postgres real.
 - Painel de métricas do organizador: em "Meus eventos", cada card mostra ingressos vendidos (por tipo e total) sobre a capacidade, e a receita já arrecadada.
-- **Aplicação publicada** — dá pra ver funcionando sem rodar nada localmente.
-
-**Ficou de fora (por escolha, não por falta de tempo):**
-
-- Recuperação de senha, envio de ingresso por e-mail e nota fiscal — explicitamente fora do escopo do desafio.
+- **Aplicação publicada:** [talao.vercel.app](https://talao-ruddy.vercel.app/)
 
 ## Decisões de projeto
 
