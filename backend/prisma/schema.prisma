@@ -66,14 +66,29 @@ model Event {
   organizador       User        @relation(fields: [organizadorId], references: [id])
   createdAt         DateTime    @default(now())
 
-  ticketTypes       TicketType[]
+  sessoes           Sessao[]
   bookings          Booking[]
+}
+
+// Uma exibição/apresentação concreta do evento (ex: sessão de terça às 19h,
+// sala 3). Eventos com uma única sessão continuam funcionando normalmente —
+// "sessões diárias" é só um evento com várias Sessao.
+model Sessao {
+  id        String   @id @default(uuid())
+  eventoId  String
+  evento    Event    @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  dataHora  DateTime
+  sala      String?
+  createdAt DateTime @default(now())
+
+  ticketTypes TicketType[]
+  bookings    Booking[]
 }
 
 model TicketType {
   id          String         @id @default(uuid())
-  eventoId    String
-  evento      Event          @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  sessaoId    String
+  sessao      Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
   nome        String
   gratuito    Boolean        @default(false)
   preco       Decimal        @default(0)
@@ -102,6 +117,8 @@ model Booking {
   id           String        @id @default(uuid())
   eventoId     String
   evento       Event         @relation(fields: [eventoId], references: [id])
+  sessaoId     String
+  sessao       Sessao        @relation(fields: [sessaoId], references: [id])
   ticketTypeId String
   ticketType   TicketType    @relation(fields: [ticketTypeId], references: [id])
   clienteId    String

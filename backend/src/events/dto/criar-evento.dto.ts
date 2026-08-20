@@ -63,6 +63,21 @@ class TicketTypeDto {
   descricao?: string;
 }
 
+class SessaoDto {
+  @IsDateString()
+  dataHora!: string;
+
+  @IsOptional()
+  @IsString()
+  sala?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => TicketTypeDto)
+  ingressos!: TicketTypeDto[];
+}
+
 export class CriarEventoDto {
   @IsString()
   titulo!: string;
@@ -93,12 +108,6 @@ export class CriarEventoDto {
   @IsString()
   linkAcesso?: string;
 
-  @IsDateString()
-  dataInicio!: string;
-
-  @IsDateString()
-  dataFim!: string;
-
   @IsString()
   gradiente!: string;
 
@@ -114,9 +123,12 @@ export class CriarEventoDto {
   @IsBoolean()
   usaMapaAssentos?: boolean;
 
+  // Uma ou mais sessões (exibições concretas) do evento — um show único tem
+  // uma sessão só; um filme em cartaz diário/teatro tem várias, cada uma com
+  // sua data/hora, sala e tipos de ingresso próprios.
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => TicketTypeDto)
-  ingressos!: TicketTypeDto[];
+  @Type(() => SessaoDto)
+  sessoes!: SessaoDto[];
 }

@@ -39,6 +39,7 @@ describe('EventsService', () => {
     prisma.event.findUnique.mockResolvedValue({
       id: 'evento-1',
       organizadorId: 'dono-original',
+      sessoes: [],
     });
 
     await expect(
@@ -52,6 +53,8 @@ describe('EventsService', () => {
     prisma.event.findUnique.mockResolvedValue({
       id: 'evento-1',
       organizadorId: 'dono-original',
+      usaMapaAssentos: false,
+      sessoes: [],
     });
     prisma.event.update.mockResolvedValue({
       id: 'evento-1',
@@ -68,7 +71,7 @@ describe('EventsService', () => {
     expect(prisma.event.update).toHaveBeenCalledWith({
       where: { id: 'evento-1' },
       data: { titulo: 'Novo título' },
-      include: { ticketTypes: true },
+      include: { sessoes: { include: { ticketTypes: true } } },
     });
   });
 });

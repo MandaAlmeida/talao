@@ -1,4 +1,4 @@
-export type StatusEvento = "publicado" | "rascunho";
+export type StatusEvento = "publicado" | "rascunho" | "em-breve" | "pre-venda";
 export type Modalidade = "presencial" | "online";
 export type Publico = "geral" | "restrito";
 
@@ -28,6 +28,22 @@ export function novoTicketType(): TicketType {
   };
 }
 
+export type Sessao = {
+  id: string;
+  dataHora: string;
+  sala: string | null;
+  ingressos: TicketType[];
+};
+
+export function novaSessao(): Sessao {
+  return {
+    id: crypto.randomUUID(),
+    dataHora: "",
+    sala: null,
+    ingressos: [novoTicketType()],
+  };
+}
+
 export type Evento = {
   id: string;
   titulo: string;
@@ -46,7 +62,20 @@ export type Evento = {
   posterUrl: string | null;
   usaMapaAssentos: boolean;
   organizadorId: string;
-  ingressos: TicketType[];
+  sessoes: Sessao[];
+};
+
+export type TicketTypeComMetricas = TicketType & { vendidos: number };
+
+export type SessaoComMetricas = Omit<Sessao, "ingressos"> & {
+  ingressos: TicketTypeComMetricas[];
+};
+
+export type EventoComMetricas = Omit<Evento, "sessoes"> & {
+  sessoes: SessaoComMetricas[];
+  totalVendidos: number;
+  totalCapacidade: number;
+  receitaTotal: number;
 };
 
 export const categoriaLabel: Record<string, string> = {
@@ -65,6 +94,17 @@ export function formatarDataEvento(iso: string): string {
   const formatado = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "short",
+  }).format(data);
+  return formatado.replace(".", "").replace(/^(\d{2}) (\w)/, (_, dia, letra) => `${dia} de ${letra}`);
+}
+
+export function formatarDataHoraSessao(iso: string): string {
+  const data = new Date(iso);
+  const formatado = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(data);
   return formatado.replace(".", "").replace(/^(\d{2}) (\w)/, (_, dia, letra) => `${dia} de ${letra}`);
 }

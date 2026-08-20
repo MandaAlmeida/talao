@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import {
   isoParaDatetimeLocal,
-  novoTicketType,
+  novaSessao,
   type Evento,
   type Modalidade,
+  type Sessao,
   type StatusEvento,
-  type TicketType,
 } from "../../_lib/eventos";
 import {
   atualizarEvento,
@@ -22,24 +22,22 @@ import { formatarCep } from "../../_lib/checkout-format";
 import { useUsuario } from "../../_lib/use-auth";
 import BuscaFilmeTmdb from "./BuscaFilmeTmdb";
 import ConfirmModal from "../ConfirmModal";
-import FormField, { dateInputClass, inputClass } from "./FormField";
+import FormField, { inputClass } from "./FormField";
 import FormSection from "./FormSection";
 import SegmentedControl from "./SegmentedControl";
 import Select from "./Select";
-import TicketTypeCard from "./TicketTypeCard";
+import SessaoCard, { type SessaoErros } from "./SessaoCard";
 import Toggle from "./Toggle";
 
 type Erros = {
   nome?: string;
   assunto?: string;
   descricao?: string;
-  dataInicio?: string;
-  dataFim?: string;
   rua?: string;
   bairro?: string;
   cidade?: string;
   estado?: string;
-  tickets?: Record<string, Partial<Record<keyof TicketType, string>>>;
+  sessoes?: Record<string, SessaoErros>;
   geral?: string;
 };
 
@@ -75,12 +73,6 @@ export default function EventForm({
   const [modalidade, setModalidade] = useState<Modalidade>(
     eventoInicial?.modalidade ?? "presencial",
   );
-  const [dataInicio, setDataInicio] = useState(
-    eventoInicial ? isoParaDatetimeLocal(eventoInicial.dataInicio) : "",
-  );
-  const [dataFim, setDataFim] = useState(
-    eventoInicial ? isoParaDatetimeLocal(eventoInicial.dataFim) : "",
-  );
   const [cep, setCep] = useState("");
   const cepConsultadoRef = useRef("");
   const [rua, setRua] = useState(eventoInicial?.endereco?.rua ?? "");
@@ -88,18 +80,22 @@ export default function EventForm({
   const [bairro, setBairro] = useState(eventoInicial?.endereco?.bairro ?? "");
   const [cidade, setCidade] = useState(eventoInicial?.endereco?.cidade ?? "");
   const [estado, setEstado] = useState(eventoInicial?.endereco?.estado ?? "");
-  const [linkAcesso, setLinkAcesso] = useState(
-    eventoInicial?.linkAcesso ?? "",
-  );
+  const [linkAcesso, setLinkAcesso] = useState(eventoInicial?.linkAcesso ?? "");
 
-  const [tickets, setTickets] = useState<TicketType[]>(
-    eventoInicial?.ingressos && eventoInicial.ingressos.length > 0
-      ? eventoInicial.ingressos.map((t) => ({
-          ...t,
-          vendaInicio: t.vendaInicio ? isoParaDatetimeLocal(t.vendaInicio) : null,
-          vendaFim: t.vendaFim ? isoParaDatetimeLocal(t.vendaFim) : null,
+  const [sessoes, setSessoes] = useState<Sessao[]>(
+    eventoInicial?.sessoes && eventoInicial.sessoes.length > 0
+      ? eventoInicial.sessoes.map((s) => ({
+          ...s,
+          dataHora: isoParaDatetimeLocal(s.dataHora),
+          ingressos: s.ingressos.map((t) => ({
+            ...t,
+            vendaInicio: t.vendaInicio
+              ? isoParaDatetimeLocal(t.vendaInicio)
+              : null,
+            vendaFim: t.vendaFim ? isoParaDatetimeLocal(t.vendaFim) : null,
+          })),
         }))
-      : [novoTicketType()],
+      : [novaSessao()],
   );
 
   const [erros, setErros] = useState<Erros>({});
@@ -129,12 +125,12 @@ export default function EventForm({
     }
   };
 
-  const atualizarTicket = (ticket: TicketType) => {
-    setTickets((prev) => prev.map((t) => (t.id === ticket.id ? ticket : t)));
+  const atualizarSessao = (sessao: Sessao) => {
+    setSessoes((prev) => prev.map((s) => (s.id === sessao.id ? sessao : s)));
   };
 
-  const removerTicket = (id: string) => {
-    setTickets((prev) => prev.filter((t) => t.id !== id));
+  const removerSessao = (id: string) => {
+    setSessoes((prev) => prev.filter((s) => s.id !== id));
   };
 
   const validar = (): Erros => {
@@ -144,8 +140,6 @@ export default function EventForm({
     if (!assunto.trim()) novosErros.assunto = "Informe o assunto do evento.";
     if (!descricao.trim())
       novosErros.descricao = "Informe a descrição do evento.";
-    if (!dataInicio) novosErros.dataInicio = "Informe a data/hora de início.";
-    if (!dataFim) novosErros.dataFim = "Informe a data/hora de fim.";
 
     if (modalidade === "presencial") {
       if (!rua.trim()) novosErros.rua = "Informe o endereço.";
@@ -154,21 +148,27 @@ export default function EventForm({
       if (!estado.trim()) novosErros.estado = "Informe o estado.";
     }
 
-    const ticketErros: Record<
-      string,
-      Partial<Record<keyof TicketType, string>>
-    > = {};
-    for (const ticket of tickets) {
-      const e: Partial<Record<keyof TicketType, string>> = {};
-      if (!ticket.nome.trim()) e.nome = "Informe o nome do ingresso.";
-      if (!ticket.gratuito && !ticket.preco)
-        e.preco = "Informe o preço do ingresso.";
-      if (!ticket.capacidade) e.capacidade = "Informe a quantidade.";
-      if (!ticket.vendaInicio) e.vendaInicio = "Informe o início das vendas.";
-      if (!ticket.vendaFim) e.vendaFim = "Informe o fim das vendas.";
-      if (Object.keys(e).length > 0) ticketErros[ticket.id] = e;
+    const sessaoErros: Record<string, SessaoErros> = {};
+    for (const sessao of sessoes) {
+      const se: SessaoErros = {};
+      if (!sessao.dataHora) se.dataHora = "Informe a data/hora da sessão.";
+
+      const ticketErros: SessaoErros["tickets"] = {};
+      for (const ticket of sessao.ingressos) {
+        const e: Partial<Record<keyof typeof ticket, string>> = {};
+        if (!ticket.nome.trim()) e.nome = "Informe o nome do ingresso.";
+        if (!ticket.gratuito && !ticket.preco)
+          e.preco = "Informe o preço do ingresso.";
+        if (!ticket.capacidade) e.capacidade = "Informe a quantidade.";
+        if (!ticket.vendaInicio) e.vendaInicio = "Informe o início das vendas.";
+        if (!ticket.vendaFim) e.vendaFim = "Informe o fim das vendas.";
+        if (Object.keys(e).length > 0) ticketErros![ticket.id] = e;
+      }
+      if (Object.keys(ticketErros ?? {}).length > 0) se.tickets = ticketErros;
+
+      if (Object.keys(se).length > 0) sessaoErros[sessao.id] = se;
     }
-    if (Object.keys(ticketErros).length > 0) novosErros.tickets = ticketErros;
+    if (Object.keys(sessaoErros).length > 0) novosErros.sessoes = sessaoErros;
 
     return novosErros;
   };
@@ -193,22 +193,25 @@ export default function EventForm({
           ? { rua, numero, bairro, cidade, estado }
           : undefined,
       linkAcesso: modalidade === "online" ? linkAcesso : undefined,
-      dataInicio,
-      dataFim,
-      gradiente: eventoInicial?.gradiente ?? "from-zinc-700 via-zinc-600 to-zinc-500",
+      gradiente:
+        eventoInicial?.gradiente ?? "from-zinc-700 via-zinc-600 to-zinc-500",
       tmdbId,
       posterUrl,
       usaMapaAssentos,
       status,
-      ingressos: tickets.map((t) => ({
-        nome: t.nome,
-        gratuito: t.gratuito,
-        preco: parseFloat(t.preco) || 0,
-        capacidade: t.capacidade,
-        vendaInicio: t.vendaInicio ?? undefined,
-        vendaFim: t.vendaFim ?? undefined,
-        publico: t.publico,
-        descricao: t.descricao,
+      sessoes: sessoes.map((s) => ({
+        dataHora: s.dataHora,
+        sala: s.sala ?? undefined,
+        ingressos: s.ingressos.map((t) => ({
+          nome: t.nome,
+          gratuito: t.gratuito,
+          preco: parseFloat(t.preco) || 0,
+          capacidade: t.capacidade,
+          vendaInicio: t.vendaInicio ?? undefined,
+          vendaFim: t.vendaFim ?? undefined,
+          publico: t.publico,
+          descricao: t.descricao,
+        })),
       })),
     };
 
@@ -262,11 +265,13 @@ export default function EventForm({
       ? "Preencha as informações abaixo para publicar seu evento."
       : "Atualize as informações do seu evento.";
   const mensagemSucesso =
-    modo === "criar" ? "Evento criado com sucesso!" : "Alterações salvas com sucesso!";
+    modo === "criar"
+      ? "Evento criado com sucesso!"
+      : "Alterações salvas com sucesso!";
   const textoBotao = modo === "criar" ? "Criar evento" : "Salvar alterações";
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-[#111111]">
       <main className="w-full max-w-3xl px-4 py-10">
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
           {titulo}
@@ -294,10 +299,25 @@ export default function EventForm({
                 value={status}
                 onChange={setStatus}
                 options={[
-                  { value: "publicado", label: "Publicado" },
                   { value: "rascunho", label: "Rascunho" },
+                  { value: "em-breve", label: "Em breve" },
+                  { value: "pre-venda", label: "Pré-venda" },
+                  { value: "publicado", label: "Publicado" },
                 ]}
               />
+              {status === "em-breve" && (
+                <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  O evento aparece na seção &quot;Em breve&quot; do início, mas
+                  os clientes ainda não conseguem comprar ingressos até você
+                  mudar para &quot;Pré-venda&quot; ou &quot;Publicado&quot;.
+                </p>
+              )}
+              {status === "pre-venda" && (
+                <p className="mt-1.5 text-xs text-blue-600 dark:text-blue-400">
+                  As vendas já estão abertas antecipadamente. O evento não
+                  aparece na seção &quot;Em breve&quot;.
+                </p>
+              )}
             </FormField>
 
             <FormField label="Nome do evento" required error={erros.nome}>
@@ -389,29 +409,6 @@ export default function EventForm({
               />
             </FormField>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                label="Início do evento"
-                required
-                error={erros.dataInicio}
-              >
-                <input
-                  type="datetime-local"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className={dateInputClass}
-                />
-              </FormField>
-              <FormField label="Fim do evento" required error={erros.dataFim}>
-                <input
-                  type="datetime-local"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className={dateInputClass}
-                />
-              </FormField>
-            </div>
-
             {modalidade === "presencial" ? (
               <>
                 <FormField label="CEP">
@@ -491,8 +488,8 @@ export default function EventForm({
           </FormSection>
 
           <FormSection
-            title="Ingressos"
-            description="Adicione um ou mais tipos de ingresso para o evento."
+            title="Sessões"
+            description="Adicione uma ou mais sessões (exibições) do evento — cada uma com sua própria data/hora, sala opcional e tipos de ingresso."
           >
             <Toggle
               checked={usaMapaAssentos}
@@ -501,24 +498,24 @@ export default function EventForm({
             />
 
             <div className="flex flex-col gap-4">
-              {tickets.map((ticket, index) => (
-                <TicketTypeCard
-                  key={ticket.id}
-                  ticket={ticket}
+              {sessoes.map((sessao, index) => (
+                <SessaoCard
+                  key={sessao.id}
+                  sessao={sessao}
                   index={index}
-                  onChange={atualizarTicket}
-                  onRemove={() => removerTicket(ticket.id)}
-                  removable={tickets.length > 1}
-                  errors={erros.tickets?.[ticket.id] ?? {}}
+                  onChange={atualizarSessao}
+                  onRemove={() => removerSessao(sessao.id)}
+                  removable={sessoes.length > 1}
+                  errors={erros.sessoes?.[sessao.id] ?? {}}
                 />
               ))}
             </div>
             <button
               type="button"
-              onClick={() => setTickets((prev) => [...prev, novoTicketType()])}
+              onClick={() => setSessoes((prev) => [...prev, novaSessao()])}
               className="self-start rounded-lg border border-dashed border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-50"
             >
-              + Adicionar tipo de ingresso
+              + Adicionar sessão
             </button>
           </FormSection>
 

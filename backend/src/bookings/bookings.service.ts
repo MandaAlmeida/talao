@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingStatus, EventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { CriarBookingDto } from './dto/criar-booking.dto';
@@ -29,9 +29,9 @@ export class BookingsService {
     private stripe: StripeService,
   ) {}
 
-  async disponibilidade(eventoId: string) {
+  async disponibilidade(sessaoId: string) {
     const ticketTypes = await this.prisma.ticketType.findMany({
-      where: { eventoId },
+      where: { sessaoId },
       include: {
         seats: true,
         bookings: {
@@ -63,23 +63,34 @@ export class BookingsService {
     });
   }
 
-  async reservar(clienteId: string, eventoId: string, dto: CriarBookingDto) {
+  async reservar(clienteId: string, sessaoId: string, dto: CriarBookingDto) {
     const secret = this.config.get<string>('QR_SECRET')!;
 
     const { booking, valorCentavos } = await this.prisma.$transaction(
       async (tx) => {
         const ticketType = await tx.ticketType.findUnique({
           where: { id: dto.ticketTypeId },
-          include: { evento: true },
+          include: { sessao: { include: { evento: true } } },
         });
 
-        if (!ticketType || ticketType.evento.id !== eventoId) {
+        if (!ticketType || ticketType.sessao.id !== sessaoId) {
           throw new NotFoundException(
-            'Tipo de ingresso não encontrado para este evento.',
+            'Tipo de ingresso não encontrado para esta sessão.',
           );
         }
 
-        const usaAssentos = ticketType.evento.usaMapaAssentos;
+        const evento = ticketType.sessao.evento;
+
+        if (
+          evento.status === EventStatus.RASCUNHO ||
+          evento.status === EventStatus.EM_BREVE
+        ) {
+          throw new ConflictException(
+            'Este evento ainda não está com as vendas abertas.',
+          );
+        }
+
+        const usaAssentos = evento.usaMapaAssentos;
         let quantidade: number;
 
         if (usaAssentos) {
@@ -144,7 +155,8 @@ export class BookingsService {
 
         const novaBooking = await tx.booking.create({
           data: {
-            eventoId,
+            eventoId: evento.id,
+            sessaoId,
             ticketTypeId: ticketType.id,
             clienteId,
             quantidade,
@@ -208,7 +220,7 @@ export class BookingsService {
   async minhas(clienteId: string) {
     return this.prisma.booking.findMany({
       where: { clienteId },
-      include: { evento: true, ticketType: true, seats: true },
+      include: { evento: true, sessao: true, ticketType: true, seats: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -216,7 +228,7 @@ export class BookingsService {
   async buscarPorId(id: string, clienteId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: { evento: true, ticketType: true, seats: true },
+      include: { evento: true, sessao: true, ticketType: true, seats: true },
     });
     if (!booking) throw new NotFoundException('Ingresso não encontrado.');
     if (booking.clienteId !== clienteId) {
@@ -228,7 +240,7 @@ export class BookingsService {
   async buscarPorShareToken(shareToken: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { shareToken },
-      include: { evento: true, ticketType: true },
+      include: { evento: true, sessao: true, ticketType: true },
     });
     if (!booking) throw new NotFoundException('Ingresso não encontrado.');
     return booking;
@@ -237,7 +249,7 @@ export class BookingsService {
   async cancelar(id: string, clienteId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: { evento: true },
+      include: { sessao: true },
     });
     if (!booking) throw new NotFoundException('Ingresso não encontrado.');
     if (booking.clienteId !== clienteId) {
@@ -249,9 +261,9 @@ export class BookingsService {
     ) {
       throw new ConflictException('Este ingresso não pode mais ser cancelado.');
     }
-    if (booking.evento.dataInicio.getTime() <= Date.now()) {
+    if (booking.sessao.dataHora.getTime() <= Date.now()) {
       throw new ConflictException(
-        'Não é possível cancelar após o início do evento.',
+        'Não é possível cancelar após o início da sessão.',
       );
     }
 

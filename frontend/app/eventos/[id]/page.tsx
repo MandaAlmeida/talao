@@ -2,38 +2,49 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { buscarDisponibilidade, type Disponibilidade } from "../../_lib/bookings-store";
-import { categoriaLabel, formatarDataEvento } from "../../_lib/eventos";
+import {
+  buscarDisponibilidade,
+  type Disponibilidade,
+} from "../../_lib/bookings-store";
+import { categoriaLabel, formatarDataEvento, formatarDataHoraSessao } from "../../_lib/eventos";
 import { useEvento } from "../../_lib/use-eventos";
 import { useEffect, useState } from "react";
 
 export default function EventoPage() {
   const params = useParams<{ id: string }>();
   const { evento, carregando, erro } = useEvento(params.id);
+  const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [disponibilidade, setDisponibilidade] = useState<Disponibilidade[]>([]);
 
+  const sessaoSelecionada = evento
+    ? (evento.sessoes.find((s) => s.id === sessaoId) ?? evento.sessoes[0])
+    : undefined;
+  const sessaoSelecionadaId = sessaoSelecionada?.id;
+
   useEffect(() => {
-    if (!evento) return;
-    buscarDisponibilidade(evento.id)
+    if (!sessaoSelecionadaId) return;
+    buscarDisponibilidade(sessaoSelecionadaId)
       .then(setDisponibilidade)
       .catch(() => {
         // erro de disponibilidade não bloqueia a exibição do evento
       });
-  }, [evento]);
+  }, [sessaoSelecionadaId]);
 
   if (erro) notFound();
   if (carregando || !evento) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-black">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Carregando evento…</p>
+      <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-[#111111]">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Carregando evento…
+        </p>
       </div>
     );
   }
 
-  const ingressos = evento.ingressos ?? [];
+  const ingressos = sessaoSelecionada?.ingressos ?? [];
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-[#111111]">
       <main className="w-full max-w-3xl px-4 py-10">
         <div
           className={`relative flex h-56 flex-col justify-end overflow-hidden rounded-2xl bg-linear-to-br p-6 text-white sm:h-72 ${evento.gradiente}`}
@@ -56,7 +67,9 @@ export default function EventoPage() {
             {evento.titulo}
           </h1>
           {evento.assunto && (
-            <p className="relative mt-1 text-sm text-white/90">{evento.assunto}</p>
+            <p className="relative mt-1 text-sm text-white/90">
+              {evento.assunto}
+            </p>
           )}
         </div>
 
@@ -86,7 +99,8 @@ export default function EventoPage() {
               Data e hora
             </h3>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              {formatarDataEvento(evento.dataInicio)} a {formatarDataEvento(evento.dataFim)}
+              {formatarDataEvento(evento.dataInicio)} a{" "}
+              {formatarDataEvento(evento.dataFim)}
             </p>
           </div>
 
@@ -120,13 +134,40 @@ export default function EventoPage() {
           </div>
         </section>
 
+        {evento.sessoes.length > 1 && (
+          <section className="mt-8">
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              Sessões
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {evento.sessoes.map((sessao) => (
+                <button
+                  key={sessao.id}
+                  type="button"
+                  onClick={() => setSessaoId(sessao.id)}
+                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                    sessao.id === sessaoSelecionada?.id
+                      ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900"
+                      : "border-zinc-300 text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  {formatarDataHoraSessao(sessao.dataHora)}
+                  {sessao.sala ? ` · ${sessao.sala}` : ""}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="mt-8">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
             Ingressos
           </h2>
           <div className="mt-3 flex flex-col gap-3">
             {ingressos.map((ingresso) => {
-              const d = disponibilidade.find((item) => item.ticketTypeId === ingresso.id);
+              const d = disponibilidade.find(
+                (item) => item.ticketTypeId === ingresso.id,
+              );
               const restam = d?.disponivel ?? ingresso.capacidade;
 
               return (
@@ -156,12 +197,34 @@ export default function EventoPage() {
           </div>
         </section>
 
-        <Link
-          href={`/eventos/${evento.id}/comprar`}
-          className="mt-8 flex w-full items-center justify-center rounded-full bg-zinc-900 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 sm:w-auto dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
-          Comprar ingresso
-        </Link>
+        {evento.status === "em-breve" ? (
+          <div className="mt-8 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500 dark:bg-amber-950 dark:text-amber-300">
+            <p className="font-semibold">Este evento está em breve.</p>
+            <p className="mt-1">
+              As vendas ainda não abriram — volte em breve para garantir seu
+              ingresso.
+            </p>
+          </div>
+        ) : (
+          <>
+            <Link
+              href={
+                sessaoSelecionada
+                  ? `/eventos/${evento.id}/comprar?sessao=${sessaoSelecionada.id}`
+                  : `/eventos/${evento.id}/comprar`
+              }
+              className="mt-8 flex w-full items-center justify-center rounded-full bg-zinc-900 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 sm:w-auto dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            >
+              Comprar ingresso
+            </Link>
+            {evento.status === "pre-venda" && (
+              <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                Este evento está em pré-venda — garanta seu ingresso antes que
+                as vendas abram para o público geral.
+              </p>
+            )}
+          </>
+        )}
       </main>
     </div>
   );

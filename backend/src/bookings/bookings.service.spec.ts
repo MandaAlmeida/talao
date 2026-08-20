@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, EventStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { BookingsService } from './bookings.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -66,18 +66,103 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     service = moduleRef.get(BookingsService);
   });
 
+  it('rejects reserving a ticket for an event that is RASCUNHO', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.RASCUNHO,
+        },
+      },
+    });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 1,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects reserving a ticket for an event that is EM_BREVE', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.EM_BREVE,
+        },
+      },
+    });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 1,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('allows reserving a ticket for an event that is PRE_VENDA', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PRE_VENDA,
+        },
+      },
+    });
+    tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
+    tx.booking.create.mockResolvedValue({
+      id: 'booking-1',
+      status: 'PENDENTE',
+      seats: [],
+    });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 1,
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it('rejects when quantity-based stock is insufficient', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-1',
       capacidade: 10,
       preco: { toString: () => '20' },
       gratuito: false,
-      evento: { id: 'evento-1', usaMapaAssentos: false },
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PUBLICADO,
+        },
+      },
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 9 } });
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', {
+      service.reservar('cliente-1', 'sessao-1', {
         ticketTypeId: 'ticket-1',
         quantidade: 2,
       }),
@@ -90,7 +175,14 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       capacidade: 80,
       preco: { toString: () => '20' },
       gratuito: false,
-      evento: { id: 'evento-1', usaMapaAssentos: true },
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: true,
+          status: EventStatus.PUBLICADO,
+        },
+      },
     });
     tx.seat.findMany.mockResolvedValue([
       { codigo: 'A1', bookingId: null },
@@ -98,7 +190,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     ]);
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', {
+      service.reservar('cliente-1', 'sessao-1', {
         ticketTypeId: 'ticket-1',
         assentos: ['A1', 'A2'],
       }),
@@ -111,11 +203,18 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       capacidade: 80,
       preco: { toString: () => '20' },
       gratuito: false,
-      evento: { id: 'evento-1', usaMapaAssentos: true },
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: true,
+          status: EventStatus.PUBLICADO,
+        },
+      },
     });
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', { ticketTypeId: 'ticket-1' }),
+      service.reservar('cliente-1', 'sessao-1', { ticketTypeId: 'ticket-1' }),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -125,7 +224,14 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       capacidade: 100,
       preco: { toString: () => '50' },
       gratuito: false,
-      evento: { id: 'evento-1', usaMapaAssentos: false },
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PUBLICADO,
+        },
+      },
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
     tx.booking.create.mockImplementation(
@@ -135,7 +241,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       }),
     );
 
-    const resultado = await service.reservar('cliente-1', 'evento-1', {
+    const resultado = await service.reservar('cliente-1', 'sessao-1', {
       ticketTypeId: 'ticket-1',
       quantidade: 2,
     });
@@ -160,7 +266,14 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       capacidade: 100,
       preco: { toString: () => '0' },
       gratuito: true,
-      evento: { id: 'evento-1', usaMapaAssentos: false },
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PUBLICADO,
+        },
+      },
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
     tx.booking.create.mockImplementation(
@@ -170,7 +283,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       }),
     );
 
-    const resultado = await service.reservar('cliente-1', 'evento-1', {
+    const resultado = await service.reservar('cliente-1', 'sessao-1', {
       ticketTypeId: 'ticket-1',
       quantidade: 1,
     });
@@ -195,7 +308,14 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       capacidade: 80,
       preco: { toString: () => '50' },
       gratuito: false,
-      evento: { id: 'evento-1', usaMapaAssentos: true },
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: true,
+          status: EventStatus.PUBLICADO,
+        },
+      },
     });
     tx.seat.findMany.mockResolvedValue([{ codigo: 'A1', bookingId: null }]);
     tx.booking.create.mockImplementation(
@@ -209,7 +329,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     );
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', {
+      service.reservar('cliente-1', 'sessao-1', {
         ticketTypeId: 'ticket-1',
         assentos: ['A1'],
       }),
@@ -243,7 +363,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         clienteId: 'outro-cliente',
         status: BookingStatus.CONFIRMADO,
         stripePaymentIntentId: null,
-        evento: { dataInicio: amanha },
+        sessao: { dataHora: amanha },
       });
 
       await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
@@ -257,7 +377,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         clienteId: 'cliente-1',
         status: BookingStatus.CANCELADO,
         stripePaymentIntentId: null,
-        evento: { dataInicio: amanha },
+        sessao: { dataHora: amanha },
       });
 
       await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
@@ -271,7 +391,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         clienteId: 'cliente-1',
         status: BookingStatus.CONFIRMADO,
         stripePaymentIntentId: null,
-        evento: { dataInicio: ontem },
+        sessao: { dataHora: ontem },
       });
 
       await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
@@ -285,7 +405,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         clienteId: 'cliente-1',
         status: BookingStatus.CONFIRMADO,
         stripePaymentIntentId: null,
-        evento: { dataInicio: amanha },
+        sessao: { dataHora: amanha },
       });
 
       await service.cancelar('booking-1', 'cliente-1');
@@ -307,7 +427,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         clienteId: 'cliente-1',
         status: BookingStatus.CONFIRMADO,
         stripePaymentIntentId: 'pi_test',
-        evento: { dataInicio: amanha },
+        sessao: { dataHora: amanha },
       });
 
       await service.cancelar('booking-1', 'cliente-1');

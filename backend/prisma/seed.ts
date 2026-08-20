@@ -74,7 +74,7 @@ async function main() {
     },
   });
 
-  // Evento 1: categoria teatro, com mapa de assentos
+  // Evento 1: categoria teatro, com mapa de assentos, 3 sessões diárias
   const eventoTeatro = await prisma.event.create({
     data: {
       titulo: 'Marrom, o Musical',
@@ -94,26 +94,67 @@ async function main() {
         estado: 'DF',
       },
       dataInicio: new Date('2026-11-06T20:00:00Z'),
-      dataFim: new Date('2026-11-08T22:00:00Z'),
+      dataFim: new Date('2026-11-08T20:00:00Z'),
       gradiente: 'from-orange-500 via-amber-400 to-pink-500',
       organizadorId: organizador.id,
-      ticketTypes: {
+      sessoes: {
         create: [
           {
-            nome: 'Pista',
-            gratuito: false,
-            preco: 120,
-            capacidade: 80,
-            publico: TicketAudience.GERAL,
-            descricao: 'Acesso à área comum do evento.',
+            dataHora: new Date('2026-11-06T20:00:00Z'),
+            sala: 'Sala 1',
+            ticketTypes: {
+              create: [
+                {
+                  nome: 'Pista',
+                  gratuito: false,
+                  preco: 120,
+                  capacidade: 80,
+                  publico: TicketAudience.GERAL,
+                  descricao: 'Acesso à área comum do evento.',
+                },
+              ],
+            },
+          },
+          {
+            dataHora: new Date('2026-11-07T20:00:00Z'),
+            sala: 'Sala 1',
+            ticketTypes: {
+              create: [
+                {
+                  nome: 'Pista',
+                  gratuito: false,
+                  preco: 120,
+                  capacidade: 80,
+                  publico: TicketAudience.GERAL,
+                  descricao: 'Acesso à área comum do evento.',
+                },
+              ],
+            },
+          },
+          {
+            dataHora: new Date('2026-11-08T20:00:00Z'),
+            sala: 'Sala 1',
+            ticketTypes: {
+              create: [
+                {
+                  nome: 'Pista',
+                  gratuito: false,
+                  preco: 120,
+                  capacidade: 80,
+                  publico: TicketAudience.GERAL,
+                  descricao: 'Acesso à área comum do evento.',
+                },
+              ],
+            },
           },
         ],
       },
     },
-    include: { ticketTypes: true },
+    include: { sessoes: { include: { ticketTypes: true }, orderBy: { dataHora: 'asc' } } },
   });
 
-  const ticketTeatro = eventoTeatro.ticketTypes[0];
+  const sessaoTeatro1 = eventoTeatro.sessoes[0];
+  const ticketTeatro = sessaoTeatro1.ticketTypes[0];
 
   await prisma.seat.createMany({
     data: codigosDeAssento().map((codigo) => ({
@@ -122,7 +163,7 @@ async function main() {
     })),
   });
 
-  // Evento 2: categoria show, estoque por quantidade
+  // Evento 2: categoria show, sessão única, estoque por quantidade
   const eventoShow = await prisma.event.create({
     data: {
       titulo: 'Noite do Rock',
@@ -141,26 +182,34 @@ async function main() {
         estado: 'SP',
       },
       dataInicio: new Date('2026-11-12T21:00:00Z'),
-      dataFim: new Date('2026-11-12T23:59:00Z'),
+      dataFim: new Date('2026-11-12T21:00:00Z'),
       gradiente: 'from-purple-700 via-indigo-600 to-violet-500',
       organizadorId: organizador.id,
-      ticketTypes: {
+      sessoes: {
         create: [
           {
-            nome: 'Inteira',
-            gratuito: false,
-            preco: 90,
-            capacidade: 500,
-            publico: TicketAudience.GERAL,
-            descricao: '',
+            dataHora: new Date('2026-11-12T21:00:00Z'),
+            ticketTypes: {
+              create: [
+                {
+                  nome: 'Inteira',
+                  gratuito: false,
+                  preco: 90,
+                  capacidade: 500,
+                  publico: TicketAudience.GERAL,
+                  descricao: '',
+                },
+              ],
+            },
           },
         ],
       },
     },
-    include: { ticketTypes: true },
+    include: { sessoes: { include: { ticketTypes: true } } },
   });
 
-  const ticketShow = eventoShow.ticketTypes[0];
+  const sessaoShow = eventoShow.sessoes[0];
+  const ticketShow = sessaoShow.ticketTypes[0];
 
   // Assentos A1, A2 ocupados por uma booking confirmada (cliente1)
   const seatsParaReservar = await prisma.seat.findMany({
@@ -171,6 +220,7 @@ async function main() {
   const bookingTeatro = await prisma.booking.create({
     data: {
       eventoId: eventoTeatro.id,
+      sessaoId: sessaoTeatro1.id,
       ticketTypeId: ticketTeatro.id,
       clienteId: cliente1.id,
       quantidade: 2,
@@ -189,6 +239,7 @@ async function main() {
   await prisma.booking.create({
     data: {
       eventoId: eventoShow.id,
+      sessaoId: sessaoShow.id,
       ticketTypeId: ticketShow.id,
       clienteId: cliente2.id,
       quantidade: 3,

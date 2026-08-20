@@ -23,11 +23,23 @@ function codigosDeAssento(): string[] {
   return codigos;
 }
 
+// A "janela" do evento (dataInicio/dataFim) é derivada das sessões — a mais
+// cedo e a mais tarde — em vez de informada manualmente pelo organizador.
+function calcularJanela(sessoes: { dataHora: string }[]) {
+  const datas = sessoes.map((s) => new Date(s.dataHora).getTime());
+  return {
+    dataInicio: new Date(Math.min(...datas)),
+    dataFim: new Date(Math.max(...datas)),
+  };
+}
+
 @Injectable()
 export class EventsService {
   constructor(private prisma: PrismaService) {}
 
   async criar(organizadorId: string, dto: CriarEventoDto) {
+    const { dataInicio, dataFim } = calcularJanela(dto.sessoes);
+
     const evento = await this.prisma.event.create({
       data: {
         titulo: dto.titulo,
@@ -38,38 +50,48 @@ export class EventsService {
         cidade: dto.cidade,
         endereco: dto.endereco as unknown as Prisma.InputJsonValue,
         linkAcesso: dto.linkAcesso,
-        dataInicio: new Date(dto.dataInicio),
-        dataFim: new Date(dto.dataFim),
+        dataInicio,
+        dataFim,
         gradiente: dto.gradiente,
         tmdbId: dto.tmdbId,
         posterUrl: dto.posterUrl,
         usaMapaAssentos: dto.usaMapaAssentos ?? false,
         organizadorId,
         status: EventStatus.RASCUNHO,
-        ticketTypes: {
-          create: dto.ingressos.map((t) => ({
-            nome: t.nome,
-            gratuito: t.gratuito,
-            preco: t.preco,
-            capacidade: t.capacidade,
-            vendaInicio: t.vendaInicio ? new Date(t.vendaInicio) : undefined,
-            vendaFim: t.vendaFim ? new Date(t.vendaFim) : undefined,
-            publico: t.publico,
-            descricao: t.descricao,
+        sessoes: {
+          create: dto.sessoes.map((s) => ({
+            dataHora: new Date(s.dataHora),
+            sala: s.sala,
+            ticketTypes: {
+              create: s.ingressos.map((t) => ({
+                nome: t.nome,
+                gratuito: t.gratuito,
+                preco: t.preco,
+                capacidade: t.capacidade,
+                vendaInicio: t.vendaInicio
+                  ? new Date(t.vendaInicio)
+                  : undefined,
+                vendaFim: t.vendaFim ? new Date(t.vendaFim) : undefined,
+                publico: t.publico,
+                descricao: t.descricao,
+              })),
+            },
           })),
         },
       },
-      include: { ticketTypes: true },
+      include: { sessoes: { include: { ticketTypes: true } } },
     });
 
     if (evento.usaMapaAssentos) {
-      for (const ticketType of evento.ticketTypes) {
-        await this.prisma.seat.createMany({
-          data: codigosDeAssento().map((codigo) => ({
-            ticketTypeId: ticketType.id,
-            codigo,
-          })),
-        });
+      for (const sessao of evento.sessoes) {
+        for (const ticketType of sessao.ticketTypes) {
+          await this.prisma.seat.createMany({
+            data: codigosDeAssento().map((codigo) => ({
+              ticketTypeId: ticketType.id,
+              codigo,
+            })),
+          });
+        }
       }
     }
 
@@ -79,7 +101,10 @@ export class EventsService {
   async listar(filtros: ListarEventosDto) {
     return this.prisma.event.findMany({
       where: {
-        status: EventStatus.PUBLICADO,
+        status:
+          filtros.status === 'em-breve'
+            ? EventStatus.EM_BREVE
+            : { in: [EventStatus.PUBLICADO, EventStatus.PRE_VENDA] },
         categoria: filtros.categoria,
         cidade: filtros.cidade
           ? { contains: filtros.cidade, mode: 'insensitive' }
@@ -88,7 +113,12 @@ export class EventsService {
           ? { contains: filtros.busca, mode: 'insensitive' }
           : undefined,
       },
-      include: { ticketTypes: true },
+      include: {
+        sessoes: {
+          include: { ticketTypes: true },
+          orderBy: { dataHora: 'asc' },
+        },
+      },
       orderBy: { dataInicio: 'asc' },
     });
   }
@@ -96,24 +126,90 @@ export class EventsService {
   async buscarPorId(id: string) {
     const evento = await this.prisma.event.findUnique({
       where: { id },
-      include: { ticketTypes: true },
+      include: {
+        sessoes: {
+          include: { ticketTypes: true },
+          orderBy: { dataHora: 'asc' },
+        },
+      },
     });
     if (!evento) throw new NotFoundException('Evento não encontrado.');
     return evento;
   }
 
   async meusEventos(organizadorId: string) {
-    return this.prisma.event.findMany({
+    const eventos = await this.prisma.event.findMany({
       where: { organizadorId },
-      include: { ticketTypes: true },
+      include: {
+        sessoes: {
+          include: {
+            ticketTypes: {
+              include: {
+                bookings: {
+                  where: {
+                    status: {
+                      in: [BookingStatus.CONFIRMADO, BookingStatus.USADO],
+                    },
+                  },
+                  select: { quantidade: true },
+                },
+              },
+            },
+          },
+          orderBy: { dataHora: 'asc' },
+        },
+      },
       orderBy: { createdAt: 'desc' },
+    });
+
+    return eventos.map((evento) => {
+      const sessoes = evento.sessoes.map((sessao) => {
+        const ticketTypes = sessao.ticketTypes.map((tt) => {
+          const vendidos = tt.bookings.reduce(
+            (total, b) => total + b.quantidade,
+            0,
+          );
+          const {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            bookings: _bookings,
+            ...ticketType
+          } = tt;
+          return { ...ticketType, vendidos };
+        });
+        return { ...sessao, ticketTypes };
+      });
+
+      const todosTicketTypes = sessoes.flatMap((s) => s.ticketTypes);
+      const totalVendidos = todosTicketTypes.reduce(
+        (total, tt) => total + tt.vendidos,
+        0,
+      );
+      const totalCapacidade = todosTicketTypes.reduce(
+        (total, tt) => total + tt.capacidade,
+        0,
+      );
+      const receitaTotal = todosTicketTypes.reduce(
+        (total, tt) =>
+          total + (tt.gratuito ? 0 : Number(tt.preco) * tt.vendidos),
+        0,
+      );
+
+      return {
+        ...evento,
+        sessoes,
+        totalVendidos,
+        totalCapacidade,
+        receitaTotal,
+      };
     });
   }
 
   async atualizar(id: string, organizadorId: string, dto: AtualizarEventoDto) {
     const evento = await this.prisma.event.findUnique({
       where: { id },
-      include: { ticketTypes: { include: { seats: true } } },
+      include: {
+        sessoes: { include: { ticketTypes: { include: { seats: true } } } },
+      },
     });
     if (!evento) throw new NotFoundException('Evento não encontrado.');
     if (evento.organizadorId !== organizadorId) {
@@ -122,34 +218,32 @@ export class EventsService {
 
     const {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      ingressos: _ingressos,
-      dataInicio,
-      dataFim,
+      sessoes: _sessoes,
       endereco,
       ...resto
     } = dto;
     const data: Record<string, unknown> = { ...resto };
-    if (dataInicio) data.dataInicio = new Date(dataInicio);
-    if (dataFim) data.dataFim = new Date(dataFim);
     if (endereco) data.endereco = endereco;
 
     const atualizado = await this.prisma.event.update({
       where: { id },
       data,
-      include: { ticketTypes: true },
+      include: { sessoes: { include: { ticketTypes: true } } },
     });
 
     const ligandoMapaAssentos =
       dto.usaMapaAssentos === true && !evento.usaMapaAssentos;
     if (ligandoMapaAssentos) {
-      for (const ticketType of evento.ticketTypes) {
-        if (ticketType.seats.length > 0) continue;
-        await this.prisma.seat.createMany({
-          data: codigosDeAssento().map((codigo) => ({
-            ticketTypeId: ticketType.id,
-            codigo,
-          })),
-        });
+      for (const sessao of evento.sessoes) {
+        for (const ticketType of sessao.ticketTypes) {
+          if (ticketType.seats.length > 0) continue;
+          await this.prisma.seat.createMany({
+            data: codigosDeAssento().map((codigo) => ({
+              ticketTypeId: ticketType.id,
+              codigo,
+            })),
+          });
+        }
       }
     }
 

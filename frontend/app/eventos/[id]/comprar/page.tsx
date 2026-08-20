@@ -1,7 +1,7 @@
 "use client";
 
-import { useParams, notFound } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams, notFound } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Elements,
@@ -28,7 +28,7 @@ import {
 } from "../../../_lib/checkout-format";
 import { ApiError } from "../../../_lib/api-client";
 import { buscarCep } from "../../../_lib/cep-client";
-import { formatarDataEvento } from "../../../_lib/eventos";
+import { formatarDataEvento, formatarDataHoraSessao } from "../../../_lib/eventos";
 import type { TicketType } from "../../../_lib/eventos";
 import { useEvento } from "../../../_lib/use-eventos";
 import { getStripe } from "../../../_lib/stripe-client";
@@ -49,8 +49,11 @@ type ErrosComprador = {
 
 function ConteudoComprarIngresso() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const sessaoIdParam = searchParams.get("sessao");
   const { evento, carregando, erro } = useEvento(params.id);
 
+  const [sessaoId, setSessaoId] = useState<string | null>(sessaoIdParam);
   const [etapa, setEtapa] = useState<Etapa>("selecao");
   const [ticketSelecionado, setTicketSelecionado] = useState<TicketType | null>(
     null,
@@ -58,6 +61,8 @@ function ConteudoComprarIngresso() {
   const [quantidade, setQuantidade] = useState(1);
   const [assentos, setAssentos] = useState<string[]>([]);
   const [disponibilidade, setDisponibilidade] = useState<Disponibilidade[]>([]);
+
+  const sessaoSelecionada = evento?.sessoes.find((s) => s.id === sessaoId) ?? evento?.sessoes[0];
 
   const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
@@ -81,13 +86,13 @@ function ConteudoComprarIngresso() {
   const quantidadeFinal = usaAssentos ? assentos.length : quantidade;
 
   useEffect(() => {
-    if (!evento) return;
-    buscarDisponibilidade(evento.id)
+    if (!sessaoSelecionada) return;
+    buscarDisponibilidade(sessaoSelecionada.id)
       .then(setDisponibilidade)
       .catch(() => {
         // erro de disponibilidade não bloqueia a seleção — o backend valida de novo ao reservar
       });
-  }, [evento]);
+  }, [sessaoSelecionada]);
 
   const disponibilidadeTicket = disponibilidade.find(
     (d) => d.ticketTypeId === ticketSelecionado?.id,
@@ -101,7 +106,7 @@ function ConteudoComprarIngresso() {
     return preco * quantidadeFinal;
   }, [ticketSelecionado, quantidadeFinal]);
 
-  const existeIngressoEsgotado = (evento?.ingressos ?? []).some((ticket) => {
+  const existeIngressoEsgotado = (sessaoSelecionada?.ingressos ?? []).some((ticket) => {
     const d = disponibilidade.find((item) => item.ticketTypeId === ticket.id);
     return d ? d.disponivel === 0 : false;
   });
@@ -123,7 +128,10 @@ function ConteudoComprarIngresso() {
           if (booking.status === "CONFIRMADO") {
             setEtapa("sucesso");
             clearInterval(intervalo);
-          } else if (booking.status === "CANCELADO" || booking.status === "EXPIRADO") {
+          } else if (
+            booking.status === "CANCELADO" ||
+            booking.status === "EXPIRADO"
+          ) {
             setEtapa("falha");
             clearInterval(intervalo);
           } else if (tentativas >= 20) {
@@ -142,14 +150,17 @@ function ConteudoComprarIngresso() {
   if (erro) notFound();
   if (carregando || !evento) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-black">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Carregando evento…</p>
+      <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-[#111111]">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Carregando evento…
+        </p>
       </div>
     );
   }
 
-  const ingressos = evento.ingressos ?? [];
+  const ingressos = sessaoSelecionada?.ingressos ?? [];
   const podeAvancar =
+    sessaoSelecionada !== undefined &&
     ticketSelecionado !== null &&
     quantidadeFinal > 0 &&
     quantidadeFinal <= disponivel;
@@ -173,7 +184,8 @@ function ConteudoComprarIngresso() {
 
     if (!cpfValido(cpf)) novosErros.cpf = "Informe um CPF válido.";
     if (!emailValido(email)) novosErros.email = "Informe um e-mail válido.";
-    if (!telefoneValido(telefone)) novosErros.telefone = "Informe um telefone válido.";
+    if (!telefoneValido(telefone))
+      novosErros.telefone = "Informe um telefone válido.";
     if (!cepValido(cep)) novosErros.cep = "Informe um CEP válido.";
     if (!rua.trim()) novosErros.rua = "Informe o endereço.";
     if (!numeroEndereco.trim()) novosErros.numero = "Informe o número.";
@@ -201,7 +213,7 @@ function ConteudoComprarIngresso() {
   };
 
   const irParaPagamento = async () => {
-    if (!podeAvancar) return;
+    if (!podeAvancar || !sessaoSelecionada) return;
 
     const novosErros = validarDadosComprador();
     setErros(novosErros);
@@ -210,7 +222,7 @@ function ConteudoComprarIngresso() {
     setCriandoReserva(true);
     setErroReserva("");
     try {
-      const reserva = await criarReserva(evento.id, {
+      const reserva = await criarReserva(sessaoSelecionada.id, {
         ticketTypeId: ticketSelecionado!.id,
         quantidade: usaAssentos ? undefined : quantidade,
         assentos: usaAssentos ? assentos : undefined,
@@ -229,20 +241,23 @@ function ConteudoComprarIngresso() {
           ? err.message
           : "Não foi possível reservar o ingresso. Tente novamente.",
       );
-      buscarDisponibilidade(evento.id).then(setDisponibilidade).catch(() => {});
+      buscarDisponibilidade(sessaoSelecionada.id)
+        .then(setDisponibilidade)
+        .catch(() => {});
     } finally {
       setCriandoReserva(false);
     }
   };
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 justify-center bg-zinc-50 dark:bg-[#111111]">
       <main className="w-full max-w-2xl px-4 py-10">
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
           {evento.titulo}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {formatarDataEvento(evento.dataInicio)} a {formatarDataEvento(evento.dataFim)} · {evento.cidade}
+          {formatarDataEvento(evento.dataInicio)} a{" "}
+          {formatarDataEvento(evento.dataFim)} · {evento.cidade}
         </p>
 
         {etapa === "selecao" && (
@@ -253,13 +268,44 @@ function ConteudoComprarIngresso() {
               </div>
             )}
 
+            {evento.sessoes.length > 1 && (
+              <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                  Escolha a sessão
+                </h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {evento.sessoes.map((sessao) => (
+                    <button
+                      key={sessao.id}
+                      type="button"
+                      onClick={() => {
+                        setSessaoId(sessao.id);
+                        setTicketSelecionado(null);
+                        setAssentos([]);
+                      }}
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                        sessao.id === sessaoSelecionada?.id
+                          ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900"
+                          : "border-zinc-300 text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      {formatarDataHoraSessao(sessao.dataHora)}
+                      {sessao.sala ? ` · ${sessao.sala}` : ""}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                 Escolha o tipo de ingresso
               </h2>
               <div className="mt-4 flex flex-col gap-3">
                 {ingressos.map((ticket) => {
-                  const d = disponibilidade.find((item) => item.ticketTypeId === ticket.id);
+                  const d = disponibilidade.find(
+                    (item) => item.ticketTypeId === ticket.id,
+                  );
                   const restam = d?.disponivel ?? ticket.capacidade;
                   const esgotado = restam === 0;
 
@@ -383,7 +429,9 @@ function ConteudoComprarIngresso() {
                         type="text"
                         inputMode="numeric"
                         value={telefone}
-                        onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+                        onChange={(e) =>
+                          setTelefone(formatarTelefone(e.target.value))
+                        }
                         placeholder="(00) 00000-0000"
                         maxLength={15}
                         className={inputClass}
@@ -512,7 +560,8 @@ function ConteudoComprarIngresso() {
               Pagamento não concluído
             </h2>
             <p className="text-sm text-red-800 dark:text-red-400">
-              Não conseguimos confirmar o pagamento a tempo. Nenhuma cobrança foi mantida.
+              Não conseguimos confirmar o pagamento a tempo. Nenhuma cobrança
+              foi mantida.
             </p>
             <button
               type="button"
@@ -521,7 +570,11 @@ function ConteudoComprarIngresso() {
                 setBookingId(null);
                 setClientSecret(null);
                 setTentativasEsgotadas(false);
-                buscarDisponibilidade(evento.id).then(setDisponibilidade).catch(() => {});
+                if (sessaoSelecionada) {
+                  buscarDisponibilidade(sessaoSelecionada.id)
+                    .then(setDisponibilidade)
+                    .catch(() => {});
+                }
               }}
               className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-900"
             >
@@ -591,7 +644,10 @@ function FormularioPagamentoStripe({
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 flex flex-col gap-4">
+    <form
+      onSubmit={(e) => void handleSubmit(e)}
+      className="mt-4 flex flex-col gap-4"
+    >
       <PaymentElement />
       {erro && <p className="text-sm text-red-600 dark:text-red-400">{erro}</p>}
       <div className="flex gap-3">
@@ -615,7 +671,7 @@ function FormularioPagamentoStripe({
 }
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
+  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-gray-900 dark:text-zinc-50";
 
 function Campo({
   label,
@@ -640,7 +696,17 @@ function Campo({
 export default function ComprarIngressoPage() {
   return (
     <RequireRole papel="cliente">
-      <ConteudoComprarIngresso />
+      <Suspense
+        fallback={
+          <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-[#111111]">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Carregando…
+            </p>
+          </div>
+        }
+      >
+        <ConteudoComprarIngresso />
+      </Suspense>
     </RequireRole>
   );
 }

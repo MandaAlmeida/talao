@@ -1,8 +1,8 @@
 import { apiFetch } from "./api-client";
-import type { Evento, Publico, StatusEvento, TicketType } from "./eventos";
+import type { Evento, EventoComMetricas, Publico, Sessao, SessaoComMetricas, StatusEvento, TicketType } from "./eventos";
 
 type RolePublico = "GERAL" | "RESTRITO";
-type RoleStatus = "RASCUNHO" | "PUBLICADO";
+type RoleStatus = "RASCUNHO" | "EM_BREVE" | "PRE_VENDA" | "PUBLICADO";
 
 type TicketTypeBackend = {
   id: string;
@@ -14,6 +14,19 @@ type TicketTypeBackend = {
   vendaFim: string | null;
   publico: RolePublico;
   descricao: string | null;
+};
+
+type TicketTypeComMetricasBackend = TicketTypeBackend & { vendidos: number };
+
+type SessaoBackend = {
+  id: string;
+  dataHora: string;
+  sala: string | null;
+  ticketTypes: TicketTypeBackend[];
+};
+
+type SessaoComMetricasBackend = Omit<SessaoBackend, "ticketTypes"> & {
+  ticketTypes: TicketTypeComMetricasBackend[];
 };
 
 type EventoBackend = {
@@ -34,7 +47,14 @@ type EventoBackend = {
   posterUrl: string | null;
   usaMapaAssentos: boolean;
   organizadorId: string;
-  ticketTypes: TicketTypeBackend[];
+  sessoes: SessaoBackend[];
+};
+
+type EventoComMetricasBackend = Omit<EventoBackend, "sessoes"> & {
+  sessoes: SessaoComMetricasBackend[];
+  totalVendidos: number;
+  totalCapacidade: number;
+  receitaTotal: number;
 };
 
 export type DadosEvento = {
@@ -46,22 +66,24 @@ export type DadosEvento = {
   cidade: string;
   endereco?: { rua: string; numero: string; bairro: string; cidade: string; estado: string };
   linkAcesso?: string;
-  dataInicio: string;
-  dataFim: string;
   gradiente: string;
   tmdbId?: number;
   posterUrl?: string;
   usaMapaAssentos?: boolean;
   status?: StatusEvento;
-  ingressos: {
-    nome: string;
-    gratuito: boolean;
-    preco: number;
-    capacidade: number;
-    vendaInicio?: string;
-    vendaFim?: string;
-    publico: Publico;
-    descricao?: string;
+  sessoes: {
+    dataHora: string;
+    sala?: string;
+    ingressos: {
+      nome: string;
+      gratuito: boolean;
+      preco: number;
+      capacidade: number;
+      vendaInicio?: string;
+      vendaFim?: string;
+      publico: Publico;
+      descricao?: string;
+    }[];
   }[];
 };
 
@@ -73,12 +95,26 @@ function publicoParaBackend(publico: Publico): RolePublico {
   return publico.toUpperCase() as RolePublico;
 }
 
+const STATUS_PARA_FRONTEND: Record<RoleStatus, StatusEvento> = {
+  RASCUNHO: "rascunho",
+  EM_BREVE: "em-breve",
+  PRE_VENDA: "pre-venda",
+  PUBLICADO: "publicado",
+};
+
+const STATUS_PARA_BACKEND: Record<StatusEvento, RoleStatus> = {
+  rascunho: "RASCUNHO",
+  "em-breve": "EM_BREVE",
+  "pre-venda": "PRE_VENDA",
+  publicado: "PUBLICADO",
+};
+
 function statusParaFrontend(status: RoleStatus): StatusEvento {
-  return status.toLowerCase() as StatusEvento;
+  return STATUS_PARA_FRONTEND[status];
 }
 
 function statusParaBackend(status: StatusEvento): RoleStatus {
-  return status.toUpperCase() as RoleStatus;
+  return STATUS_PARA_BACKEND[status];
 }
 
 function ticketParaFrontend(ticket: TicketTypeBackend): TicketType {
@@ -92,6 +128,27 @@ function ticketParaFrontend(ticket: TicketTypeBackend): TicketType {
     vendaFim: ticket.vendaFim,
     publico: publicoParaFrontend(ticket.publico),
     descricao: ticket.descricao ?? "",
+  };
+}
+
+function sessaoParaFrontend(sessao: SessaoBackend): Sessao {
+  return {
+    id: sessao.id,
+    dataHora: sessao.dataHora,
+    sala: sessao.sala,
+    ingressos: sessao.ticketTypes.map(ticketParaFrontend),
+  };
+}
+
+function sessaoComMetricasParaFrontend(sessao: SessaoComMetricasBackend): SessaoComMetricas {
+  return {
+    id: sessao.id,
+    dataHora: sessao.dataHora,
+    sala: sessao.sala,
+    ingressos: sessao.ticketTypes.map((tt) => ({
+      ...ticketParaFrontend(tt),
+      vendidos: tt.vendidos,
+    })),
   };
 }
 
@@ -114,7 +171,17 @@ function eventoParaFrontend(evento: EventoBackend): Evento {
     posterUrl: evento.posterUrl,
     usaMapaAssentos: evento.usaMapaAssentos,
     organizadorId: evento.organizadorId,
-    ingressos: evento.ticketTypes.map(ticketParaFrontend),
+    sessoes: evento.sessoes.map(sessaoParaFrontend),
+  };
+}
+
+function eventoComMetricasParaFrontend(evento: EventoComMetricasBackend): EventoComMetricas {
+  return {
+    ...eventoParaFrontend(evento),
+    sessoes: evento.sessoes.map(sessaoComMetricasParaFrontend),
+    totalVendidos: evento.totalVendidos,
+    totalCapacidade: evento.totalCapacidade,
+    receitaTotal: evento.receitaTotal,
   };
 }
 
@@ -122,20 +189,26 @@ function dadosParaBackend(dados: DadosEvento) {
   return {
     ...dados,
     status: dados.status ? statusParaBackend(dados.status) : undefined,
-    ingressos: dados.ingressos.map((t) => ({
-      ...t,
-      publico: publicoParaBackend(t.publico),
+    sessoes: dados.sessoes.map((s) => ({
+      ...s,
+      ingressos: s.ingressos.map((t) => ({
+        ...t,
+        publico: publicoParaBackend(t.publico),
+      })),
     })),
   };
 }
 
 const eventosListeners = new Set<() => void>();
 const meusEventosListeners = new Set<() => void>();
+const emBreveListeners = new Set<() => void>();
 
 const ARRAY_VAZIO: Evento[] = [];
+const ARRAY_VAZIO_COM_METRICAS: EventoComMetricas[] = [];
 
 let eventosCache: Evento[] = ARRAY_VAZIO;
-let meusEventosCache: Evento[] = ARRAY_VAZIO;
+let meusEventosCache: EventoComMetricas[] = ARRAY_VAZIO_COM_METRICAS;
+let emBreveCache: Evento[] = ARRAY_VAZIO;
 
 export function subscribeEventos(listener: () => void) {
   eventosListeners.add(listener);
@@ -155,12 +228,12 @@ export function subscribeMeusEventos(listener: () => void) {
   return () => meusEventosListeners.delete(listener);
 }
 
-export function getMeusEventosSnapshot(): Evento[] {
+export function getMeusEventosSnapshot(): EventoComMetricas[] {
   return meusEventosCache;
 }
 
-export function getMeusEventosServerSnapshot(): Evento[] {
-  return ARRAY_VAZIO;
+export function getMeusEventosServerSnapshot(): EventoComMetricas[] {
+  return ARRAY_VAZIO_COM_METRICAS;
 }
 
 export async function carregarEventos(): Promise<void> {
@@ -169,9 +242,28 @@ export async function carregarEventos(): Promise<void> {
   eventosListeners.forEach((listener) => listener());
 }
 
+export function subscribeEmBreve(listener: () => void) {
+  emBreveListeners.add(listener);
+  return () => emBreveListeners.delete(listener);
+}
+
+export function getEmBreveSnapshot(): Evento[] {
+  return emBreveCache;
+}
+
+export function getEmBreveServerSnapshot(): Evento[] {
+  return ARRAY_VAZIO;
+}
+
+export async function carregarEmBreve(): Promise<void> {
+  const eventos = await apiFetch<EventoBackend[]>("/events?status=em-breve", { auth: false });
+  emBreveCache = eventos.map(eventoParaFrontend);
+  emBreveListeners.forEach((listener) => listener());
+}
+
 export async function carregarMeusEventos(): Promise<void> {
-  const eventos = await apiFetch<EventoBackend[]>("/events/meus");
-  meusEventosCache = eventos.map(eventoParaFrontend);
+  const eventos = await apiFetch<EventoComMetricasBackend[]>("/events/meus");
+  meusEventosCache = eventos.map(eventoComMetricasParaFrontend);
   meusEventosListeners.forEach((listener) => listener());
 }
 
@@ -189,13 +281,13 @@ export async function criarEvento(dados: DadosEvento): Promise<Evento> {
     body: JSON.stringify(dadosCriacao),
   });
 
-  // POST /events sempre cria em RASCUNHO (decisão do backend) — publica em seguida
-  // para que "criar evento" continue sendo uma única ação do ponto de vista do usuário.
+  // POST /events sempre cria em RASCUNHO (decisão do backend) — atualiza o status
+  // em seguida para que "criar evento" continue sendo uma única ação do usuário.
   const publicado =
-    dados.status === "publicado"
+    dados.status && dados.status !== "rascunho"
       ? await apiFetch<EventoBackend>(`/events/${criado.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ status: "PUBLICADO" }),
+          body: JSON.stringify({ status: statusParaBackend(dados.status) }),
         })
       : criado;
 

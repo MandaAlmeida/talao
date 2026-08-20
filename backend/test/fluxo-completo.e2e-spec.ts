@@ -6,7 +6,10 @@ import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 
 type RespostaAuth = { accessToken: string };
-type RespostaEvento = { id: string; ticketTypes: { id: string }[] };
+type RespostaEvento = {
+  id: string;
+  sessoes: { id: string; ticketTypes: { id: string }[] }[];
+};
 type RespostaReserva = { bookingId: string; clientSecret: string | null };
 type RespostaBooking = { id: string; codigoCompra: string };
 type RespostaValidacao = { situacao: string };
@@ -58,6 +61,12 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
     });
     const eventoIds = eventos.map((e) => e.id);
 
+    const sessoes = await prisma.sessao.findMany({
+      where: { eventoId: { in: eventoIds } },
+      select: { id: true },
+    });
+    const sessaoIds = sessoes.map((s) => s.id);
+
     await prisma.booking.deleteMany({
       where: {
         OR: [
@@ -67,8 +76,9 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
       },
     });
     await prisma.ticketType.deleteMany({
-      where: { eventoId: { in: eventoIds } },
+      where: { sessaoId: { in: sessaoIds } },
     });
+    await prisma.sessao.deleteMany({ where: { id: { in: sessaoIds } } });
     await prisma.event.deleteMany({ where: { id: { in: eventoIds } } });
     await prisma.user.deleteMany({ where: { id: { in: usuarioIds } } });
 
@@ -116,7 +126,7 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
       .send({ email: `cliente-${sufixo}@e2e.dev`, senha: 'senha-errada' })
       .expect(401);
 
-    // 4. Organizador cria um evento com um ingresso gratuito
+    // 4. Organizador cria um evento com uma sessão e um ingresso gratuito
     const evento = await request(app.getHttpServer())
       .post('/events')
       .set('Authorization', `Bearer ${tokenOrganizador}`)
@@ -125,23 +135,27 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
         categoria: 'workshop',
         modalidade: 'online',
         cidade: 'Online',
-        dataInicio: new Date(Date.now() + 48 * 60 * 60_000).toISOString(),
-        dataFim: new Date(Date.now() + 50 * 60 * 60_000).toISOString(),
         gradiente: 'from-blue-700 via-blue-600 to-blue-500',
-        ingressos: [
+        sessoes: [
           {
-            nome: 'Entrada',
-            gratuito: true,
-            preco: 0,
-            capacidade: 5,
-            publico: 'GERAL',
+            dataHora: new Date(Date.now() + 48 * 60 * 60_000).toISOString(),
+            ingressos: [
+              {
+                nome: 'Entrada',
+                gratuito: true,
+                preco: 0,
+                capacidade: 5,
+                publico: 'GERAL',
+              },
+            ],
           },
         ],
       })
       .expect(201);
 
-    const { id: eventoId, ticketTypes } = evento.body as RespostaEvento;
-    const ticketTypeId = ticketTypes[0].id;
+    const { id: eventoId, sessoes } = evento.body as RespostaEvento;
+    const sessaoId = sessoes[0].id;
+    const ticketTypeId = sessoes[0].ticketTypes[0].id;
 
     // 5. Cliente não vê o evento em RASCUNHO na listagem pública
     const listaAntesDePublicar = await request(app.getHttpServer())
@@ -171,14 +185,14 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
 
     // 7. Outro papel (organizador) não pode reservar — só CLIENTE
     await request(app.getHttpServer())
-      .post(`/events/${eventoId}/bookings`)
+      .post(`/sessoes/${sessaoId}/bookings`)
       .set('Authorization', `Bearer ${tokenOrganizador}`)
       .send({ ticketTypeId, quantidade: 1 })
       .expect(403);
 
     // 8. Cliente reserva o ingresso gratuito — confirma na hora, sem Stripe
     const reserva = await request(app.getHttpServer())
-      .post(`/events/${eventoId}/bookings`)
+      .post(`/sessoes/${sessaoId}/bookings`)
       .set('Authorization', `Bearer ${tokenCliente}`)
       .send({ ticketTypeId, quantidade: 1 })
       .expect(201);
@@ -269,24 +283,28 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
           cidade: 'São Paulo',
           estado: 'SP',
         },
-        dataInicio: new Date(Date.now() + 48 * 60 * 60_000).toISOString(),
-        dataFim: new Date(Date.now() + 50 * 60 * 60_000).toISOString(),
         gradiente: 'from-purple-700 via-purple-600 to-purple-500',
         usaMapaAssentos: true,
-        ingressos: [
+        sessoes: [
           {
-            nome: 'Plateia',
-            gratuito: true,
-            preco: 0,
-            capacidade: 50,
-            publico: 'GERAL',
+            dataHora: new Date(Date.now() + 48 * 60 * 60_000).toISOString(),
+            ingressos: [
+              {
+                nome: 'Plateia',
+                gratuito: true,
+                preco: 0,
+                capacidade: 50,
+                publico: 'GERAL',
+              },
+            ],
           },
         ],
       })
       .expect(201);
 
-    const { id: eventoId, ticketTypes } = evento.body as RespostaEvento;
-    const ticketTypeId = ticketTypes[0].id;
+    const { id: eventoId, sessoes } = evento.body as RespostaEvento;
+    const sessaoId = sessoes[0].id;
+    const ticketTypeId = sessoes[0].ticketTypes[0].id;
     await request(app.getHttpServer())
       .patch(`/events/${eventoId}`)
       .set('Authorization', `Bearer ${tokenOrganizador}`)
@@ -295,11 +313,11 @@ describe('Fluxo completo: registro → evento → reserva → portaria → cance
 
     const [resultadoA, resultadoB] = await Promise.all([
       request(app.getHttpServer())
-        .post(`/events/${eventoId}/bookings`)
+        .post(`/sessoes/${sessaoId}/bookings`)
         .set('Authorization', `Bearer ${tokenClienteA}`)
         .send({ ticketTypeId, assentos: ['A1'] }),
       request(app.getHttpServer())
-        .post(`/events/${eventoId}/bookings`)
+        .post(`/sessoes/${sessaoId}/bookings`)
         .set('Authorization', `Bearer ${tokenClienteB}`)
         .send({ ticketTypeId, assentos: ['A1'] }),
     ]);

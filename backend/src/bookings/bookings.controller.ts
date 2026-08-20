@@ -23,20 +23,20 @@ import type { AuthenticatedRequest } from '../common/types/authenticated-request
 export class BookingsController {
   constructor(private bookingsService: BookingsService) {}
 
-  @Get('events/:eventoId/disponibilidade')
-  disponibilidade(@Param('eventoId') eventoId: string) {
-    return this.bookingsService.disponibilidade(eventoId);
+  @Get('sessoes/:sessaoId/disponibilidade')
+  disponibilidade(@Param('sessaoId') sessaoId: string) {
+    return this.bookingsService.disponibilidade(sessaoId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.CLIENTE)
-  @Post('events/:eventoId/bookings')
+  @Post('sessoes/:sessaoId/bookings')
   reservar(
     @Req() req: AuthenticatedRequest,
-    @Param('eventoId') eventoId: string,
+    @Param('sessaoId') sessaoId: string,
     @Body() dto: CriarBookingDto,
   ) {
-    return this.bookingsService.reservar(req.user.userId, eventoId, dto);
+    return this.bookingsService.reservar(req.user.userId, sessaoId, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -51,12 +51,12 @@ export type DadosReserva = {
   assentos?: string[];
 };
 
-export async function buscarDisponibilidade(eventoId: string): Promise<Disponibilidade[]> {
-  return apiFetch<Disponibilidade[]>(`/events/${eventoId}/disponibilidade`, { auth: false });
+export async function buscarDisponibilidade(sessaoId: string): Promise<Disponibilidade[]> {
+  return apiFetch<Disponibilidade[]>(`/sessoes/${sessaoId}/disponibilidade`, { auth: false });
 }
 
-export async function criarReserva(eventoId: string, dados: DadosReserva): Promise<ReservaCriada> {
-  return apiFetch<ReservaCriada>(`/events/${eventoId}/bookings`, {
+export async function criarReserva(sessaoId: string, dados: DadosReserva): Promise<ReservaCriada> {
+  return apiFetch<ReservaCriada>(`/sessoes/${sessaoId}/bookings`, {
     method: "POST",
     body: JSON.stringify(dados),
   });
