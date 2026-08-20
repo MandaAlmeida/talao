@@ -36,7 +36,7 @@ export default function NavBar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">
+      <div className="flex h-16 w-full items-center justify-between px-4 lg:px-28">
         <Link
           href="/"
           className="text-xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50"

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import CameraQrScanner from "../_components/CameraQrScanner";
 import RequireRole from "../_components/RequireRole";
+import Select from "../_components/form/Select";
 import { ApiError } from "../_lib/api-client";
 import { useEventos } from "../_lib/use-eventos";
 import { validarTicket, type ResultadoValidacao } from "../_lib/tickets-store";
@@ -87,23 +88,21 @@ function ConteudoPortaria() {
           <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Evento
           </label>
-          <select
-            value={eventoId}
-            onChange={(e) => {
-              setEventoId(e.target.value);
-              setResultado(null);
-              setHistorico([]);
-              setErroValidacao("");
-            }}
-            className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
-          >
-            <option value="">Selecione o evento a validar</option>
-            {eventos.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.titulo}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1.5">
+            <Select
+              value={eventoId}
+              onChange={(v) => {
+                setEventoId(v);
+                setResultado(null);
+                setHistorico([]);
+                setErroValidacao("");
+              }}
+              options={[
+                { value: "", label: "Selecione o evento a validar" },
+                ...eventos.map((e) => ({ value: e.id, label: e.titulo })),
+              ]}
+            />
+          </div>
         </section>
 
         {eventoId && (

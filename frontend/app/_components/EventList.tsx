@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { categoriaLabel, formatarDataEvento, type Evento } from "../_lib/eventos";
+import Select from "./form/Select";
 
 export default function EventList({ eventos }: { eventos: Evento[] }) {
   const [busca, setBusca] = useState("");
@@ -59,31 +60,28 @@ export default function EventList({ eventos }: { eventos: Evento[] }) {
           />
         </div>
 
-        <select
+        <Select
           value={local}
-          onChange={(e) => setLocal(e.target.value)}
-          className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none sm:w-56 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-        >
-          <option value="todos">Todos os locais</option>
-          {cidades.map((cidade) => (
-            <option key={cidade} value={cidade}>
-              {cidade}
-            </option>
-          ))}
-        </select>
+          onChange={setLocal}
+          className="sm:w-56"
+          options={[
+            { value: "todos", label: "Todos os locais" },
+            ...cidades.map((cidade) => ({ value: cidade, label: cidade })),
+          ]}
+        />
 
-        <select
+        <Select
           value={categoria}
-          onChange={(e) => setCategoria(e.target.value)}
-          className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none sm:w-56 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-        >
-          <option value="todas">Todas as categorias</option>
-          {categorias.map((cat) => (
-            <option key={cat} value={cat}>
-              {categoriaLabel[cat] ?? cat}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoria}
+          className="sm:w-56"
+          options={[
+            { value: "todas", label: "Todas as categorias" },
+            ...categorias.map((cat) => ({
+              value: cat,
+              label: categoriaLabel[cat] ?? cat,
+            })),
+          ]}
+        />
       </div>
 
       {eventosFiltrados.length === 0 ? (

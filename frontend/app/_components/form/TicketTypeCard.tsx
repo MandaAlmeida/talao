@@ -1,6 +1,7 @@
 import type { TicketType } from "../../_lib/eventos";
 import FormField, { dateInputClass, inputClass } from "./FormField";
 import SegmentedControl from "./SegmentedControl";
+import Select from "./Select";
 
 export default function TicketTypeCard({
   ticket,
@@ -110,16 +111,14 @@ export default function TicketTypeCard({
         </div>
 
         <FormField label="Quem pode comprar">
-          <select
+          <Select
             value={ticket.publico}
-            onChange={(e) =>
-              set("publico", e.target.value as TicketType["publico"])
-            }
-            className={inputClass}
-          >
-            <option value="geral">Público geral</option>
-            <option value="restrito">Somente com link ou senha</option>
-          </select>
+            onChange={(v) => set("publico", v)}
+            options={[
+              { value: "geral", label: "Público geral" },
+              { value: "restrito", label: "Somente com link ou senha" },
+            ]}
+          />
         </FormField>
 
         <FormField label="Descrição">

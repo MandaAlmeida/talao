@@ -25,6 +25,7 @@ import ConfirmModal from "../ConfirmModal";
 import FormField, { dateInputClass, inputClass } from "./FormField";
 import FormSection from "./FormSection";
 import SegmentedControl from "./SegmentedControl";
+import Select from "./Select";
 import TicketTypeCard from "./TicketTypeCard";
 import Toggle from "./Toggle";
 
@@ -337,21 +338,21 @@ export default function EventForm({
             </FormField>
 
             <FormField label="Categoria">
-              <select
+              <Select
                 value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Selecione uma categoria</option>
-                <option value="show">Show</option>
-                <option value="teatro">Teatro</option>
-                <option value="cinema">Cinema</option>
-                <option value="esporte">Esporte</option>
-                <option value="workshop">Workshop</option>
-                <option value="festa">Festa</option>
-                <option value="gastronomia">Gastronomia</option>
-                <option value="outro">Outro</option>
-              </select>
+                onChange={setCategoria}
+                options={[
+                  { value: "", label: "Selecione uma categoria" },
+                  { value: "show", label: "Show" },
+                  { value: "teatro", label: "Teatro" },
+                  { value: "cinema", label: "Cinema" },
+                  { value: "esporte", label: "Esporte" },
+                  { value: "workshop", label: "Workshop" },
+                  { value: "festa", label: "Festa" },
+                  { value: "gastronomia", label: "Gastronomia" },
+                  { value: "outro", label: "Outro" },
+                ]}
+              />
             </FormField>
 
             {categoria === "cinema" && (
