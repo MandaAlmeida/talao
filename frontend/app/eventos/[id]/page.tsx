@@ -2,15 +2,24 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { getQuantidadeVendida } from "../../_lib/compras-store";
+import { buscarDisponibilidade, type Disponibilidade } from "../../_lib/bookings-store";
 import { categoriaLabel, formatarDataEvento } from "../../_lib/eventos";
-import { useCompras } from "../../_lib/use-compras";
 import { useEvento } from "../../_lib/use-eventos";
+import { useEffect, useState } from "react";
 
 export default function EventoPage() {
   const params = useParams<{ id: string }>();
   const { evento, carregando, erro } = useEvento(params.id);
-  useCompras(); // mantém a disponibilidade reativa a compras/cancelamentos
+  const [disponibilidade, setDisponibilidade] = useState<Disponibilidade[]>([]);
+
+  useEffect(() => {
+    if (!evento) return;
+    buscarDisponibilidade(evento.id)
+      .then(setDisponibilidade)
+      .catch(() => {
+        // erro de disponibilidade não bloqueia a exibição do evento
+      });
+  }, [evento]);
 
   if (erro) notFound();
   if (carregando || !evento) {
@@ -117,8 +126,8 @@ export default function EventoPage() {
           </h2>
           <div className="mt-3 flex flex-col gap-3">
             {ingressos.map((ingresso) => {
-              const vendidos = getQuantidadeVendida(ingresso.id);
-              const restam = Math.max(0, ingresso.capacidade - vendidos);
+              const d = disponibilidade.find((item) => item.ticketTypeId === ingresso.id);
+              const restam = d?.disponivel ?? ingresso.capacidade;
 
               return (
                 <div
