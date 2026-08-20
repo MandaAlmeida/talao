@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "BookingStatus" ADD VALUE 'PENDENTE';
+ALTER TYPE "BookingStatus" ADD VALUE 'EXPIRADO';

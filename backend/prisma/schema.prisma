@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,4 +5,114 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ORGANIZADOR
+  CLIENTE
+  PORTARIA
+}
+
+enum EventStatus {
+  RASCUNHO
+  PUBLICADO
+}
+
+enum TicketAudience {
+  GERAL
+  RESTRITO
+}
+
+enum BookingStatus {
+  PENDENTE
+  CONFIRMADO
+  CANCELADO
+  EXPIRADO
+  USADO
+}
+
+model User {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senhaHash String
+  papel     Role
+  createdAt DateTime @default(now())
+
+  eventos   Event[]
+  bookings  Booking[]
+}
+
+model Event {
+  id                String      @id @default(uuid())
+  titulo            String
+  categoria         String
+  assunto           String?
+  descricaoCompleta String?
+  status            EventStatus @default(RASCUNHO)
+  modalidade        String
+  cidade            String
+  endereco          Json?
+  linkAcesso        String?
+  dataInicio        DateTime
+  dataFim           DateTime
+  gradiente         String
+  tmdbId            Int?
+  posterUrl         String?
+  usaMapaAssentos   Boolean     @default(false)
+  organizadorId     String
+  organizador       User        @relation(fields: [organizadorId], references: [id])
+  createdAt         DateTime    @default(now())
+
+  ticketTypes       TicketType[]
+  bookings          Booking[]
+}
+
+model TicketType {
+  id          String         @id @default(uuid())
+  eventoId    String
+  evento      Event          @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  nome        String
+  gratuito    Boolean        @default(false)
+  preco       Decimal        @default(0)
+  capacidade  Int
+  vendaInicio DateTime?
+  vendaFim    DateTime?
+  publico     TicketAudience @default(GERAL)
+  descricao   String?
+
+  bookings    Booking[]
+  seats       Seat[]
+}
+
+model Seat {
+  id           String      @id @default(uuid())
+  ticketTypeId String
+  ticketType   TicketType  @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  codigo       String
+  bookingId    String?
+  booking      Booking?    @relation(fields: [bookingId], references: [id])
+
+  @@unique([ticketTypeId, codigo])
+}
+
+model Booking {
+  id           String        @id @default(uuid())
+  eventoId     String
+  evento       Event         @relation(fields: [eventoId], references: [id])
+  ticketTypeId String
+  ticketType   TicketType    @relation(fields: [ticketTypeId], references: [id])
+  clienteId    String
+  cliente      User          @relation(fields: [clienteId], references: [id])
+  quantidade   Int
+  status       BookingStatus @default(PENDENTE)
+  codigoCompra String        @unique
+  qrAssinatura String
+  shareToken   String        @unique @default(uuid())
+  stripePaymentIntentId String? @unique
+  expiraEm     DateTime?
+  createdAt    DateTime      @default(now())
+  usadoEm      DateTime?
+
+  seats        Seat[]
 }
