@@ -29,7 +29,9 @@ describe('EventsService', () => {
     prisma.event.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.atualizar('evento-inexistente', 'organizador-1', { titulo: 'Novo título' }),
+      service.atualizar('evento-inexistente', 'organizador-1', {
+        titulo: 'Novo título',
+      }),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -40,7 +42,9 @@ describe('EventsService', () => {
     });
 
     await expect(
-      service.atualizar('evento-1', 'outro-organizador', { titulo: 'Novo título' }),
+      service.atualizar('evento-1', 'outro-organizador', {
+        titulo: 'Novo título',
+      }),
     ).rejects.toThrow(ForbiddenException);
   });
 

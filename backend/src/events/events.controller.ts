@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { CriarEventoDto } from './dto/criar-evento.dto';
 import { AtualizarEventoDto } from './dto/atualizar-evento.dto';
@@ -22,6 +23,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../common/types/authenticated-request';
 
+@ApiTags('events')
+@ApiBearerAuth()
 @Controller('events')
 export class EventsController {
   constructor(private eventsService: EventsService) {}

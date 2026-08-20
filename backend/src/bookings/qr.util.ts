@@ -8,7 +8,11 @@ export function assinarCodigo(codigo: string, secret: string): string {
   return createHmac('sha256', secret).update(codigo).digest('hex');
 }
 
-export function verificarAssinatura(codigo: string, assinatura: string, secret: string): boolean {
+export function verificarAssinatura(
+  codigo: string,
+  assinatura: string,
+  secret: string,
+): boolean {
   const esperada = assinarCodigo(codigo, secret);
   const bufEsperada = Buffer.from(esperada, 'hex');
   const bufRecebida = Buffer.from(assinatura, 'hex');

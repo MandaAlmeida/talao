@@ -59,7 +59,10 @@ describe('TicketsService', () => {
       eventoId: 'evento-2',
       status: BookingStatus.CONFIRMADO,
     });
-    prisma.event.findUnique.mockResolvedValue({ id: 'evento-2', titulo: 'Outro Evento' });
+    prisma.event.findUnique.mockResolvedValue({
+      id: 'evento-2',
+      titulo: 'Outro Evento',
+    });
 
     // Sign with the real secret via a fresh service call path isn't possible without
     // exposing qrAssinatura, so this test stubs verificarAssinatura indirectly by
@@ -115,6 +118,7 @@ describe('TicketsService', () => {
     expect(resultado.situacao).toBe('valido');
     expect(prisma.booking.update).toHaveBeenCalledWith({
       where: { id: 'booking-1' },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: { status: BookingStatus.USADO, usadoEm: expect.any(Date) },
     });
   });

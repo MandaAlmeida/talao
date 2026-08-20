@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,7 +25,9 @@ export class AuthService {
   }
 
   async registrar(dto: RegistroDto) {
-    const existente = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const existente = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (existente) {
       throw new ConflictException('Já existe um usuário com este e-mail.');
     }
@@ -38,12 +44,19 @@ export class AuthService {
 
     return {
       accessToken: this.emitirToken(usuario),
-      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel },
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        papel: usuario.papel,
+      },
     };
   }
 
   async login(dto: LoginDto) {
-    const usuario = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const usuario = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (!usuario) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
@@ -55,7 +68,12 @@ export class AuthService {
 
     return {
       accessToken: this.emitirToken(usuario),
-      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel },
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        papel: usuario.papel,
+      },
     };
   }
 }

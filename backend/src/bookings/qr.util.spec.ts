@@ -1,4 +1,8 @@
-import { assinarCodigo, gerarCodigoCompra, verificarAssinatura } from './qr.util';
+import {
+  assinarCodigo,
+  gerarCodigoCompra,
+  verificarAssinatura,
+} from './qr.util';
 
 describe('qr.util', () => {
   const secret = 'test-secret';
@@ -24,7 +28,9 @@ describe('qr.util', () => {
   it('rejects a tampered signature against a valid code', () => {
     const codigo = 'TLO-ABC123';
 
-    expect(verificarAssinatura(codigo, 'assinatura-forjada', secret)).toBe(false);
+    expect(verificarAssinatura(codigo, 'assinatura-forjada', secret)).toBe(
+      false,
+    );
   });
 
   it('rejects a valid code/signature pair signed with a different secret', () => {

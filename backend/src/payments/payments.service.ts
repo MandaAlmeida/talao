@@ -11,9 +11,9 @@ export class PaymentsService {
 
   async processarEvento(event: Stripe.Event) {
     if (event.type === 'payment_intent.succeeded') {
-      await this.confirmar(event.data.object as Stripe.PaymentIntent);
+      await this.confirmar(event.data.object);
     } else if (event.type === 'payment_intent.payment_failed') {
-      await this.cancelar(event.data.object as Stripe.PaymentIntent);
+      await this.cancelar(event.data.object);
     } else {
       this.logger.debug(`Evento Stripe ignorado: ${event.type}`);
     }

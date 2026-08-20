@@ -30,7 +30,10 @@ export class TicketsService {
       include: { ticketType: true },
     });
 
-    if (!booking || !verificarAssinatura(codigo, booking.qrAssinatura, secret)) {
+    if (
+      !booking ||
+      !verificarAssinatura(codigo, booking.qrAssinatura, secret)
+    ) {
       return {
         codigo,
         situacao: 'invalido',
@@ -43,11 +46,19 @@ export class TicketsService {
     }
 
     if (booking.status === BookingStatus.PENDENTE) {
-      return { codigo, situacao: 'invalido', mensagem: 'Pagamento deste ingresso ainda não foi confirmado.' };
+      return {
+        codigo,
+        situacao: 'invalido',
+        mensagem: 'Pagamento deste ingresso ainda não foi confirmado.',
+      };
     }
 
     if (booking.status === BookingStatus.EXPIRADO) {
-      return { codigo, situacao: 'invalido', mensagem: 'Reserva deste ingresso expirou sem pagamento.' };
+      return {
+        codigo,
+        situacao: 'invalido',
+        mensagem: 'Reserva deste ingresso expirou sem pagamento.',
+      };
     }
 
     if (booking.eventoId !== dto.eventoId) {

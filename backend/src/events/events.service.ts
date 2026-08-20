@@ -81,8 +81,12 @@ export class EventsService {
       where: {
         status: EventStatus.PUBLICADO,
         categoria: filtros.categoria,
-        cidade: filtros.cidade ? { contains: filtros.cidade, mode: 'insensitive' } : undefined,
-        titulo: filtros.busca ? { contains: filtros.busca, mode: 'insensitive' } : undefined,
+        cidade: filtros.cidade
+          ? { contains: filtros.cidade, mode: 'insensitive' }
+          : undefined,
+        titulo: filtros.busca
+          ? { contains: filtros.busca, mode: 'insensitive' }
+          : undefined,
       },
       include: { ticketTypes: true },
       orderBy: { dataInicio: 'asc' },
@@ -116,7 +120,14 @@ export class EventsService {
       throw new ForbiddenException('Você não é o organizador deste evento.');
     }
 
-    const { ingressos, dataInicio, dataFim, endereco, ...resto } = dto;
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      ingressos: _ingressos,
+      dataInicio,
+      dataFim,
+      endereco,
+      ...resto
+    } = dto;
     const data: Record<string, unknown> = { ...resto };
     if (dataInicio) data.dataInicio = new Date(dataInicio);
     if (dataFim) data.dataFim = new Date(dataFim);
@@ -128,7 +139,8 @@ export class EventsService {
       include: { ticketTypes: true },
     });
 
-    const ligandoMapaAssentos = dto.usaMapaAssentos === true && !evento.usaMapaAssentos;
+    const ligandoMapaAssentos =
+      dto.usaMapaAssentos === true && !evento.usaMapaAssentos;
     if (ligandoMapaAssentos) {
       for (const ticketType of evento.ticketTypes) {
         if (ticketType.seats.length > 0) continue;
@@ -167,7 +179,13 @@ export class EventsService {
     const totalReservas = await this.prisma.booking.count({
       where: {
         eventoId: id,
-        status: { in: [BookingStatus.PENDENTE, BookingStatus.CONFIRMADO, BookingStatus.USADO] },
+        status: {
+          in: [
+            BookingStatus.PENDENTE,
+            BookingStatus.CONFIRMADO,
+            BookingStatus.USADO,
+          ],
+        },
       },
     });
     if (totalReservas > 0) {

@@ -1,98 +1,100 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Talão — Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API REST em NestJS + Prisma + PostgreSQL para a plataforma de eventos e ingressos Talão. Veja o [README raiz](../README.md) para uma visão geral do projeto (frontend, decisões, uso de IA).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- **NestJS 11** — módulos, guards, pipes.
+- **Prisma 6** — ORM sobre PostgreSQL 16.
+- **JWT** (`@nestjs/jwt` + `passport-jwt`) — autenticação com 3 papéis: `ORGANIZADOR`, `CLIENTE`, `PORTARIA`.
+- **Stripe** — pagamento (PaymentIntent) e reembolso, em modo de teste.
+- **`@nestjs/throttler`** — rate limiting (5 tentativas/min em `/auth/login`).
+- **`@nestjs/swagger`** — documentação interativa da API.
+- **Jest + Supertest** — testes unitários e e2e.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Pré-requisitos
 
-## Project setup
+- Node 20+
+- Docker (só para o Postgres — a API roda direto com Node)
+- Uma conta [Stripe](https://dashboard.stripe.com) (gratuita, modo de teste)
+
+## Configuração
 
 ```bash
-$ npm install
+docker compose up -d          # sobe o Postgres em localhost:5433
+cp .env.example .env
+npm install
+npx prisma migrate deploy
+npx prisma db seed
 ```
 
-## Compile and run the project
+### Variáveis de ambiente (`.env`)
+
+| Variável | Descrição |
+|---|---|
+| `DATABASE_URL` | String de conexão do Postgres (já vem certa para o `docker-compose.yml` deste repo) |
+| `PORT` | Porta da API (padrão `3001`) |
+| `JWT_SECRET` / `JWT_EXPIRES_IN` | Segredo e validade do token de autenticação |
+| `QR_SECRET` | Segredo usado para assinar (HMAC) o código de compra dos ingressos — sem ele ninguém forja um QR válido |
+| `TMDB_API_KEY` / `TMDB_BASE_URL` | Chave da API do TMDb, usada para popular eventos de categoria "cinema" a partir do catálogo de filmes |
+| `STRIPE_SECRET_KEY` | Chave secreta do Stripe (modo teste) |
+| `STRIPE_WEBHOOK_SECRET` | Segredo de assinatura do webhook do Stripe |
+
+### TMDb
+
+Chave gratuita em [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) (v3 auth). Sem ela, o app inteiro funciona normalmente — só a busca de filmes em "Criar evento → categoria cinema" fica indisponível (o endpoint retorna 500 com uma mensagem explicando o motivo).
+
+### Stripe
+
+1. Crie uma conta em [dashboard.stripe.com](https://dashboard.stripe.com) e confirme que o modo **Test mode** está ativo.
+2. Em **Developers → API keys**, copie a **Secret key** (`sk_test_...`) para `STRIPE_SECRET_KEY`. A **Publishable key** (`pk_test_...`) vai no `.env.local` do frontend, não aqui.
+3. Para o webhook local, instale a [Stripe CLI](https://docs.stripe.com/stripe-cli) (`brew install stripe/stripe-cli/stripe` no macOS) e rode, num terminal separado, deixando ativo enquanto testa pagamentos:
+   ```bash
+   stripe login
+   stripe listen --forward-to localhost:3001/webhooks/stripe
+   ```
+   O comando imprime um `whsec_...` — cole em `STRIPE_WEBHOOK_SECRET`.
+
+Sem essas duas chaves a API sobe normalmente, mas qualquer reserva de ingresso **pago** falha ao tentar criar o PaymentIntent (ingressos gratuitos continuam funcionando sem Stripe nenhum, já que nunca chamam a API).
+
+## Rodando
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run start:dev
 ```
 
-## Run tests
+API em `http://localhost:3001`. Documentação interativa (Swagger) em `http://localhost:3001/docs`.
+
+## Dados de teste
+
+`npx prisma db seed` cria um organizador, dois clientes, um usuário de portaria e dois eventos publicados (um com mapa de assentos parcialmente ocupado, outro com estoque por quantidade). Credenciais e detalhes no [README raiz](../README.md#dados-de-teste-seed).
+
+## Testes
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm test          # unitários — mockados, não precisam de banco
+npm run test:e2e  # e2e — precisa do Postgres rodando com as migrations aplicadas (docker compose up -d + prisma migrate deploy)
+npm run test:cov  # unitários com relatório de cobertura
 ```
 
-## Deployment
+O e2e (`test/fluxo-completo.e2e-spec.ts`) sobe a aplicação inteira contra um banco real e percorre o fluxo crítico ponta a ponta: registro dos 3 papéis, login, criação e publicação de evento, reserva de ingresso, listagem "meus ingressos", validação de QR na portaria (válido → já utilizado → inválido) e um teste de concorrência garantindo que o mesmo assento não é reservado duas vezes.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Módulos e rotas
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+| Módulo | Rota base | Responsabilidade |
+|---|---|---|
+| `auth` | `/auth` | Registro e login (JWT) |
+| `events` | `/events` | CRUD de eventos, listagem pública com filtro por categoria/cidade/busca |
+| `bookings` | `/events/:id/bookings`, `/bookings` | Reserva, disponibilidade, "minhas reservas", compartilhamento por link, cancelamento |
+| `tickets` | `/tickets/validar` | Validação de ingresso na portaria |
+| `catalog` | `/catalog/filmes` | Busca de filmes no TMDb |
+| `payments` | `/webhooks/stripe` | Webhook do Stripe (confirmação/recusa de pagamento) |
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+Lista completa de endpoints, parâmetros e respostas: `/docs` (Swagger) com a API rodando.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Decisões técnicas específicas do backend
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- **Reserva otimista**: o assento/estoque é marcado como ocupado (`status: PENDENTE`) dentro de uma transação Prisma antes do PaymentIntent ser criado — dois clientes reservando o mesmo assento ao mesmo tempo nunca "passam" os dois (testado em `bookings.service.spec.ts` e no e2e).
+- **Expiração automática**: um `@Cron` (`bookings-cleanup.service.ts`) roda a cada minuto e expira reservas `PENDENTE` havia mais de 10 minutos, liberando o assento — evita que um carrinho abandonado prenda estoque para sempre.
+- **QR assinado, não só um código aleatório**: `qr.util.ts` assina o `codigoCompra` com HMAC-SHA256 usando `QR_SECRET`. A portaria valida código + assinatura, então adivinhar o formato do código não é suficiente para forjar um ingresso.
+- **Rate limiting diferenciado**: `/auth/login` tem limite de 5 req/min (protege contra brute-force de senha); `/auth/registro` tem 20 req/min (ação legítima menos sensível, não deveria travar um fluxo de testes ou onboarding em lote).

@@ -54,7 +54,9 @@ export class CatalogService {
     return data.results.map((filme) => ({
       id: filme.id,
       titulo: filme.title,
-      posterUrl: filme.poster_path ? `https://image.tmdb.org/t/p/w500${filme.poster_path}` : null,
+      posterUrl: filme.poster_path
+        ? `https://image.tmdb.org/t/p/w500${filme.poster_path}`
+        : null,
       dataLancamento: filme.release_date,
       sinopse: filme.overview,
     }));

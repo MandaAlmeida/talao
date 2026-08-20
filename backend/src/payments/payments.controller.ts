@@ -1,8 +1,20 @@
-import { BadRequestException, Controller, Headers, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+} from '@nestjs/common';
 import type { Request } from 'express';
+import type Stripe from 'stripe';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
 
+// Webhook consumido pela Stripe, não por clientes da API — excluído do Swagger.
+@ApiExcludeController()
 @Controller('webhooks/stripe')
 export class PaymentsController {
   constructor(
@@ -12,12 +24,19 @@ export class PaymentsController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  async receberWebhook(@Req() req: Request, @Headers('stripe-signature') assinatura: string) {
-    if (!assinatura) throw new BadRequestException('Assinatura do webhook ausente.');
+  async receberWebhook(
+    @Req() req: Request,
+    @Headers('stripe-signature') assinatura: string,
+  ) {
+    if (!assinatura)
+      throw new BadRequestException('Assinatura do webhook ausente.');
 
-    let event;
+    let event: Stripe.Event;
     try {
-      event = this.stripeService.verificarAssinaturaWebhook(req.body as Buffer, assinatura);
+      event = this.stripeService.verificarAssinaturaWebhook(
+        req.body as Buffer,
+        assinatura,
+      );
     } catch {
       throw new BadRequestException('Assinatura do webhook inválida.');
     }

@@ -17,14 +17,20 @@ describe('PaymentsService', () => {
     };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [PaymentsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        PaymentsService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = moduleRef.get(PaymentsService);
   });
 
   it('confirms a PENDENTE booking on payment_intent.succeeded', async () => {
-    prisma.booking.findUnique.mockResolvedValue({ id: 'booking-1', status: BookingStatus.PENDENTE });
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      status: BookingStatus.PENDENTE,
+    });
 
     await service.processarEvento({
       type: 'payment_intent.succeeded',
@@ -38,7 +44,10 @@ describe('PaymentsService', () => {
   });
 
   it('is idempotent: does nothing if booking is no longer PENDENTE', async () => {
-    prisma.booking.findUnique.mockResolvedValue({ id: 'booking-1', status: BookingStatus.CONFIRMADO });
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      status: BookingStatus.CONFIRMADO,
+    });
 
     await service.processarEvento({
       type: 'payment_intent.succeeded',
@@ -49,7 +58,10 @@ describe('PaymentsService', () => {
   });
 
   it('cancels and frees seats on payment_intent.payment_failed', async () => {
-    prisma.booking.findUnique.mockResolvedValue({ id: 'booking-1', status: BookingStatus.PENDENTE });
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      status: BookingStatus.PENDENTE,
+    });
 
     await service.processarEvento({
       type: 'payment_intent.payment_failed',
@@ -67,7 +79,10 @@ describe('PaymentsService', () => {
   });
 
   it('ignores unrelated event types', async () => {
-    await service.processarEvento({ type: 'charge.refunded', data: { object: {} } } as never);
+    await service.processarEvento({
+      type: 'charge.refunded',
+      data: { object: {} },
+    } as never);
     expect(prisma.booking.findUnique).not.toHaveBeenCalled();
   });
 });

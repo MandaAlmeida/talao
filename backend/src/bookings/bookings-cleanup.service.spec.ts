@@ -17,20 +17,30 @@ describe('BookingsCleanupService', () => {
     };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [BookingsCleanupService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        BookingsCleanupService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = moduleRef.get(BookingsCleanupService);
   });
 
   it('expires PENDENTE bookings past their expiraEm and frees seats', async () => {
-    prisma.booking.findMany.mockResolvedValue([{ id: 'booking-1' }, { id: 'booking-2' }]);
+    prisma.booking.findMany.mockResolvedValue([
+      { id: 'booking-1' },
+      { id: 'booking-2' },
+    ]);
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
 
     const total = await service.expirarReservasVencidas();
 
     expect(prisma.booking.findMany).toHaveBeenCalledWith({
-      where: { status: BookingStatus.PENDENTE, expiraEm: { lt: expect.any(Date) } },
+      where: {
+        status: BookingStatus.PENDENTE,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        expiraEm: { lt: expect.any(Date) },
+      },
     });
     expect(prisma.booking.updateMany).toHaveBeenCalledWith({
       where: { id: 'booking-1', status: BookingStatus.PENDENTE },

@@ -1,5 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BookingsService } from './bookings.service';
 import { CriarBookingDto } from './dto/criar-booking.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -7,6 +17,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../common/types/authenticated-request';
 
+@ApiTags('bookings')
+@ApiBearerAuth()
 @Controller()
 export class BookingsController {
   constructor(private bookingsService: BookingsService) {}

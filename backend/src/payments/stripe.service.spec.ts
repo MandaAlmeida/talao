@@ -11,7 +11,10 @@ describe('StripeService', () => {
         StripeService,
         {
           provide: ConfigService,
-          useValue: { get: (key: string) => (key === 'STRIPE_SECRET_KEY' ? 'sk_test_fake' : 'whsec_fake') },
+          useValue: {
+            get: (key: string) =>
+              key === 'STRIPE_SECRET_KEY' ? 'sk_test_fake' : 'whsec_fake',
+          },
         },
       ],
     }).compile();

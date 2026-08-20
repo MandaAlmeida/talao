@@ -1,5 +1,10 @@
 import { Test } from '@nestjs/testing';
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { BookingsService } from './bookings.service';
@@ -28,17 +33,25 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     };
     prisma = {
       $transaction: jest.fn((arg: unknown) =>
-        typeof arg === 'function' ? (arg as (tx: unknown) => unknown)(tx) : Promise.all(arg as unknown[]),
+        typeof arg === 'function'
+          ? (arg as (tx: unknown) => unknown)(tx)
+          : Promise.all(arg as unknown[]),
       ),
       booking: {
-        update: jest.fn().mockResolvedValue({ id: 'booking-1', expiraEm: new Date() }),
+        update: jest
+          .fn()
+          .mockResolvedValue({ id: 'booking-1', expiraEm: new Date() }),
         findUnique: jest.fn(),
       },
       seat: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     stripeMock = {
-      criarPaymentIntent: jest.fn().mockResolvedValue({ id: 'pi_test', clientSecret: 'secret_test' }),
-      criarReembolso: jest.fn().mockResolvedValue({ id: 're_test', status: 'succeeded' }),
+      criarPaymentIntent: jest
+        .fn()
+        .mockResolvedValue({ id: 'pi_test', clientSecret: 'secret_test' }),
+      criarReembolso: jest
+        .fn()
+        .mockResolvedValue({ id: 're_test', status: 'succeeded' }),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -64,7 +77,10 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 9 } });
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', { ticketTypeId: 'ticket-1', quantidade: 2 }),
+      service.reservar('cliente-1', 'evento-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 2,
+      }),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -82,7 +98,10 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     ]);
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', { ticketTypeId: 'ticket-1', assentos: ['A1', 'A2'] }),
+      service.reservar('cliente-1', 'evento-1', {
+        ticketTypeId: 'ticket-1',
+        assentos: ['A1', 'A2'],
+      }),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -109,10 +128,12 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       evento: { id: 'evento-1', usaMapaAssentos: false },
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
-    tx.booking.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
-      id: 'booking-1',
-      ...data,
-    }));
+    tx.booking.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'booking-1',
+        ...data,
+      }),
+    );
 
     const resultado = await service.reservar('cliente-1', 'evento-1', {
       ticketTypeId: 'ticket-1',
@@ -120,9 +141,15 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     });
 
     expect(tx.booking.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: BookingStatus.PENDENTE }) }),
+      expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: expect.objectContaining({ status: BookingStatus.PENDENTE }),
+      }),
     );
-    expect(stripeMock.criarPaymentIntent).toHaveBeenCalledWith(10000, 'booking-1');
+    expect(stripeMock.criarPaymentIntent).toHaveBeenCalledWith(
+      10000,
+      'booking-1',
+    );
     expect(resultado.clientSecret).toBe('secret_test');
     expect(resultado.bookingId).toBe('booking-1');
   });
@@ -136,10 +163,12 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       evento: { id: 'evento-1', usaMapaAssentos: false },
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
-    tx.booking.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
-      id: 'booking-1',
-      ...data,
-    }));
+    tx.booking.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'booking-1',
+        ...data,
+      }),
+    );
 
     const resultado = await service.reservar('cliente-1', 'evento-1', {
       ticketTypeId: 'ticket-1',
@@ -147,7 +176,13 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     });
 
     expect(tx.booking.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: BookingStatus.CONFIRMADO, expiraEm: null }) }),
+      expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: expect.objectContaining({
+          status: BookingStatus.CONFIRMADO,
+          expiraEm: null,
+        }),
+      }),
     );
     expect(stripeMock.criarPaymentIntent).not.toHaveBeenCalled();
     expect(resultado.clientSecret).toBeNull();
@@ -163,14 +198,21 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       evento: { id: 'evento-1', usaMapaAssentos: true },
     });
     tx.seat.findMany.mockResolvedValue([{ codigo: 'A1', bookingId: null }]);
-    tx.booking.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
-      id: 'booking-1',
-      ...data,
-    }));
-    stripeMock.criarPaymentIntent.mockRejectedValue(new Error('Stripe indisponível'));
+    tx.booking.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'booking-1',
+        ...data,
+      }),
+    );
+    stripeMock.criarPaymentIntent.mockRejectedValue(
+      new Error('Stripe indisponível'),
+    );
 
     await expect(
-      service.reservar('cliente-1', 'evento-1', { ticketTypeId: 'ticket-1', assentos: ['A1'] }),
+      service.reservar('cliente-1', 'evento-1', {
+        ticketTypeId: 'ticket-1',
+        assentos: ['A1'],
+      }),
     ).rejects.toThrow('Stripe indisponível');
 
     expect(prisma.booking.update).toHaveBeenCalledWith({
@@ -190,7 +232,9 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     it('throws NotFoundException when the booking does not exist', async () => {
       prisma.booking.findUnique.mockResolvedValue(null);
 
-      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(NotFoundException);
+      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException when the booking belongs to another client', async () => {
@@ -202,7 +246,9 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         evento: { dataInicio: amanha },
       });
 
-      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('throws ConflictException when the booking is already CANCELADO', async () => {
@@ -214,7 +260,9 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         evento: { dataInicio: amanha },
       });
 
-      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(ConflictException);
+      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('throws ConflictException when the event already started', async () => {
@@ -226,7 +274,9 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         evento: { dataInicio: ontem },
       });
 
-      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(ConflictException);
+      await expect(service.cancelar('booking-1', 'cliente-1')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('cancels and frees seats without refunding a free booking', async () => {

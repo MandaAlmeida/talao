@@ -22,11 +22,20 @@ export class StripeService {
   }
 
   async criarReembolso(paymentIntentId: string) {
-    const reembolso = await this.client.refunds.create({ payment_intent: paymentIntentId });
+    const reembolso = await this.client.refunds.create({
+      payment_intent: paymentIntentId,
+    });
     return { id: reembolso.id, status: reembolso.status };
   }
 
-  verificarAssinaturaWebhook(payload: Buffer, assinatura: string): Stripe.Event {
-    return this.client.webhooks.constructEvent(payload, assinatura, this.webhookSecret);
+  verificarAssinaturaWebhook(
+    payload: Buffer,
+    assinatura: string,
+  ): Stripe.Event {
+    return this.client.webhooks.constructEvent(
+      payload,
+      assinatura,
+      this.webhookSecret,
+    );
   }
 }
