@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentsService } from '../payments/payments.service';
+import { StripeService } from '../payments/stripe.service';
 import { CriarBookingDto } from './dto/criar-booking.dto';
 import { assinarCodigo, gerarCodigoCompra } from './qr.util';
 
@@ -22,7 +22,7 @@ export class BookingsService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    private payments: PaymentsService,
+    private stripe: StripeService,
   ) {}
 
   async disponibilidade(eventoId: string) {
@@ -134,7 +134,7 @@ export class BookingsService {
 
     let paymentIntent: { id: string; clientSecret: string };
     try {
-      paymentIntent = this.payments.criarPaymentIntent(booking.id);
+      paymentIntent = await this.stripe.criarPaymentIntent(valorCentavos, booking.id);
     } catch (err) {
       await this.prisma.$transaction([
         this.prisma.booking.update({ where: { id: booking.id }, data: { status: BookingStatus.CANCELADO } }),

@@ -1,29 +1,49 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { Injectable, Logger } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
+import type Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(private prisma: PrismaService) {}
 
-  // Simula a criação de um payment intent, sem chamar nenhum provedor externo.
-  criarPaymentIntent(bookingId: string) {
-    return {
-      id: `pi_sim_${randomUUID().replace(/-/g, '')}`,
-      clientSecret: `pi_sim_${bookingId}_secret_${randomUUID().replace(/-/g, '')}`,
-    };
+  async processarEvento(event: Stripe.Event) {
+    if (event.type === 'payment_intent.succeeded') {
+      await this.confirmar(event.data.object as Stripe.PaymentIntent);
+    } else if (event.type === 'payment_intent.payment_failed') {
+      await this.cancelar(event.data.object as Stripe.PaymentIntent);
+    } else {
+      this.logger.debug(`Evento Stripe ignorado: ${event.type}`);
+    }
   }
 
-  // Simula a confirmação do pagamento (equivalente ao que um webhook real faria).
-  async confirmar(bookingId: string) {
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
-    if (!booking) throw new NotFoundException('Reserva não encontrada.');
-    if (booking.status !== BookingStatus.PENDENTE) return booking;
+  private async confirmar(paymentIntent: Stripe.PaymentIntent) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { stripePaymentIntentId: paymentIntent.id },
+    });
+    if (!booking || booking.status !== BookingStatus.PENDENTE) return;
 
-    return this.prisma.booking.update({
-      where: { id: bookingId },
+    await this.prisma.booking.update({
+      where: { id: booking.id },
       data: { status: BookingStatus.CONFIRMADO },
+    });
+  }
+
+  private async cancelar(paymentIntent: Stripe.PaymentIntent) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { stripePaymentIntentId: paymentIntent.id },
+    });
+    if (!booking || booking.status !== BookingStatus.PENDENTE) return;
+
+    await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: BookingStatus.CANCELADO },
+    });
+    await this.prisma.seat.updateMany({
+      where: { bookingId: booking.id },
+      data: { bookingId: null },
     });
   }
 }

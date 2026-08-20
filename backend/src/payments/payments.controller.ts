@@ -1,21 +1,28 @@
-import { Controller, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { BadRequestException, Controller, Headers, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
+import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 
-// Endpoint de simulação de pagamento: em produção, isto seria substituído por um
-// webhook do provedor de pagamentos (ex: Stripe) — aqui, o próprio cliente confirma.
-@Controller('payments')
+@Controller('webhooks/stripe')
 export class PaymentsController {
-  constructor(private paymentsService: PaymentsService) {}
+  constructor(
+    private stripeService: StripeService,
+    private paymentsService: PaymentsService,
+  ) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.CLIENTE)
+  @Post()
   @HttpCode(HttpStatus.OK)
-  @Post('simular/:bookingId/confirmar')
-  confirmar(@Param('bookingId') bookingId: string) {
-    return this.paymentsService.confirmar(bookingId);
+  async receberWebhook(@Req() req: Request, @Headers('stripe-signature') assinatura: string) {
+    if (!assinatura) throw new BadRequestException('Assinatura do webhook ausente.');
+
+    let event;
+    try {
+      event = this.stripeService.verificarAssinaturaWebhook(req.body as Buffer, assinatura);
+    } catch {
+      throw new BadRequestException('Assinatura do webhook inválida.');
+    }
+
+    await this.paymentsService.processarEvento(event);
+    return { received: true };
   }
 }

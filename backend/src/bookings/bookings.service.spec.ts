@@ -4,7 +4,7 @@ import { BookingStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { BookingsService } from './bookings.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentsService } from '../payments/payments.service';
+import { StripeService } from '../payments/stripe.service';
 
 describe('BookingsService (unit, mocked Prisma)', () => {
   let service: BookingsService;
@@ -18,7 +18,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     seat: { findMany: jest.Mock; updateMany: jest.Mock };
     booking: { aggregate: jest.Mock; create: jest.Mock };
   };
-  let paymentsMock: { criarPaymentIntent: jest.Mock };
+  let stripeMock: { criarPaymentIntent: jest.Mock };
 
   beforeEach(async () => {
     tx = {
@@ -33,8 +33,8 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       booking: { update: jest.fn().mockResolvedValue({ id: 'booking-1', expiraEm: new Date() }) },
       seat: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
-    paymentsMock = {
-      criarPaymentIntent: jest.fn().mockReturnValue({ id: 'pi_test', clientSecret: 'secret_test' }),
+    stripeMock = {
+      criarPaymentIntent: jest.fn().mockResolvedValue({ id: 'pi_test', clientSecret: 'secret_test' }),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -42,7 +42,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         BookingsService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: () => 'test-qr-secret' } },
-        { provide: PaymentsService, useValue: paymentsMock },
+        { provide: StripeService, useValue: stripeMock },
       ],
     }).compile();
 
@@ -96,7 +96,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('creates a PENDENTE booking and a simulated PaymentIntent', async () => {
+  it('creates a PENDENTE booking and a Stripe PaymentIntent', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-1',
       capacidade: 100,
@@ -118,12 +118,12 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     expect(tx.booking.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: BookingStatus.PENDENTE }) }),
     );
-    expect(paymentsMock.criarPaymentIntent).toHaveBeenCalledWith('booking-1');
+    expect(stripeMock.criarPaymentIntent).toHaveBeenCalledWith(10000, 'booking-1');
     expect(resultado.clientSecret).toBe('secret_test');
     expect(resultado.bookingId).toBe('booking-1');
   });
 
-  it('confirms a free booking immediately without creating a PaymentIntent', async () => {
+  it('confirms a free booking immediately without calling Stripe', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-1',
       capacidade: 100,
@@ -145,12 +145,12 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     expect(tx.booking.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: BookingStatus.CONFIRMADO, expiraEm: null }) }),
     );
-    expect(paymentsMock.criarPaymentIntent).not.toHaveBeenCalled();
+    expect(stripeMock.criarPaymentIntent).not.toHaveBeenCalled();
     expect(resultado.clientSecret).toBeNull();
     expect(resultado.bookingId).toBe('booking-1');
   });
 
-  it('rolls back the reservation and frees seats if creating the PaymentIntent fails', async () => {
+  it('rolls back the reservation and frees seats if Stripe fails', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-1',
       capacidade: 80,
@@ -163,13 +163,11 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       id: 'booking-1',
       ...data,
     }));
-    paymentsMock.criarPaymentIntent.mockImplementation(() => {
-      throw new Error('Falha ao simular pagamento');
-    });
+    stripeMock.criarPaymentIntent.mockRejectedValue(new Error('Stripe indisponível'));
 
     await expect(
       service.reservar('cliente-1', 'evento-1', { ticketTypeId: 'ticket-1', assentos: ['A1'] }),
-    ).rejects.toThrow('Falha ao simular pagamento');
+    ).rejects.toThrow('Stripe indisponível');
 
     expect(prisma.booking.update).toHaveBeenCalledWith({
       where: { id: 'booking-1' },
