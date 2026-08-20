@@ -73,10 +73,3 @@ export async function buscarMinhasBookings(): Promise<BookingDetalhado[]> {
 export async function buscarBookingDetalhado(id: string): Promise<BookingDetalhado> {
   return apiFetch<BookingDetalhado>(`/bookings/${id}`);
 }
-
-// Confirma o pagamento simulado (equivalente ao que um webhook do gateway faria em produção).
-export async function confirmarPagamentoSimulado(bookingId: string): Promise<Booking> {
-  return apiFetch<Booking>(`/payments/simular/${bookingId}/confirmar`, {
-    method: "POST",
-  });
-}

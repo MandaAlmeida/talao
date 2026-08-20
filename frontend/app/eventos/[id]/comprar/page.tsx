@@ -3,12 +3,17 @@
 import { useParams, notFound } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  Elements,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
 import SeatMap from "../../../_components/SeatMap";
 import RequireRole from "../../../_components/RequireRole";
 import {
   buscarBooking,
   buscarDisponibilidade,
-  confirmarPagamentoSimulado,
   criarReserva,
   type Disponibilidade,
 } from "../../../_lib/bookings-store";
@@ -26,6 +31,7 @@ import { buscarCep } from "../../../_lib/cep-client";
 import { formatarDataEvento } from "../../../_lib/eventos";
 import type { TicketType } from "../../../_lib/eventos";
 import { useEvento } from "../../../_lib/use-eventos";
+import { getStripe } from "../../../_lib/stripe-client";
 
 type Etapa = "selecao" | "pagamento" | "confirmando" | "sucesso" | "falha";
 
@@ -68,8 +74,7 @@ function ConteudoComprarIngresso() {
   const [erroReserva, setErroReserva] = useState("");
   const [criandoReserva, setCriandoReserva] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
-  const [confirmandoPagamento, setConfirmandoPagamento] = useState(false);
-  const [erroPagamento, setErroPagamento] = useState("");
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [tentativasEsgotadas, setTentativasEsgotadas] = useState(false);
 
   const usaAssentos = evento?.usaMapaAssentos ?? false;
@@ -212,10 +217,10 @@ function ConteudoComprarIngresso() {
       });
       setBookingId(reserva.bookingId);
       if (reserva.clientSecret === null) {
-        // Ingresso gratuito: o backend já confirma a reserva na hora.
+        // Ingresso gratuito: o backend já confirma a reserva na hora, sem Stripe.
         setEtapa("sucesso");
       } else {
-        // Pagamento pago: simulado, sem gateway externo — o cliente confirma manualmente.
+        setClientSecret(reserva.clientSecret);
         setEtapa("pagamento");
       }
     } catch (err) {
@@ -227,24 +232,6 @@ function ConteudoComprarIngresso() {
       buscarDisponibilidade(evento.id).then(setDisponibilidade).catch(() => {});
     } finally {
       setCriandoReserva(false);
-    }
-  };
-
-  const confirmarPagamento = async () => {
-    if (!bookingId) return;
-    setConfirmandoPagamento(true);
-    setErroPagamento("");
-    try {
-      await confirmarPagamentoSimulado(bookingId);
-      setEtapa("confirmando");
-    } catch (err) {
-      setErroPagamento(
-        err instanceof ApiError
-          ? err.message
-          : "Não foi possível confirmar o pagamento.",
-      );
-    } finally {
-      setConfirmandoPagamento(false);
     }
   };
 
@@ -485,7 +472,7 @@ function ConteudoComprarIngresso() {
           </div>
         )}
 
-        {etapa === "pagamento" && ticketSelecionado && bookingId && (
+        {etapa === "pagamento" && ticketSelecionado && clientSecret && (
           <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-4 dark:border-zinc-800">
               <div>
@@ -499,34 +486,12 @@ function ConteudoComprarIngresso() {
               </div>
             </div>
 
-            <div className="mt-4 flex flex-col gap-4">
-              <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-                Pagamento simulado — nenhuma cobrança real é feita. Clique em
-                &quot;Confirmar pagamento&quot; para concluir a compra.
-              </div>
-
-              {erroPagamento && (
-                <p className="text-sm text-red-600 dark:text-red-400">{erroPagamento}</p>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEtapa("selecao")}
-                  className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
-                >
-                  Voltar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void confirmarPagamento()}
-                  disabled={confirmandoPagamento}
-                  className="flex-1 rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
-                >
-                  {confirmandoPagamento ? "Confirmando…" : "Confirmar pagamento"}
-                </button>
-              </div>
-            </div>
+            <Elements stripe={getStripe()} options={{ clientSecret }}>
+              <FormularioPagamentoStripe
+                onSucesso={() => setEtapa("confirmando")}
+                onVoltar={() => setEtapa("selecao")}
+              />
+            </Elements>
           </section>
         )}
 
@@ -554,6 +519,7 @@ function ConteudoComprarIngresso() {
               onClick={() => {
                 setEtapa("selecao");
                 setBookingId(null);
+                setClientSecret(null);
                 setTentativasEsgotadas(false);
                 buscarDisponibilidade(evento.id).then(setDisponibilidade).catch(() => {});
               }}
@@ -587,6 +553,64 @@ function ConteudoComprarIngresso() {
         )}
       </main>
     </div>
+  );
+}
+
+function FormularioPagamentoStripe({
+  onSucesso,
+  onVoltar,
+}: {
+  onSucesso: () => void;
+  onVoltar: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setProcessando(true);
+    setErro("");
+
+    const { error } = await stripe.confirmPayment({
+      elements,
+      redirect: "if_required",
+    });
+
+    setProcessando(false);
+
+    if (error) {
+      setErro(error.message ?? "Não foi possível confirmar o pagamento.");
+      return;
+    }
+
+    onSucesso();
+  };
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 flex flex-col gap-4">
+      <PaymentElement />
+      {erro && <p className="text-sm text-red-600 dark:text-red-400">{erro}</p>}
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onVoltar}
+          className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+        >
+          Voltar
+        </button>
+        <button
+          type="submit"
+          disabled={!stripe || processando}
+          className="flex-1 rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        >
+          {processando ? "Processando…" : "Pagar"}
+        </button>
+      </div>
+    </form>
   );
 }
 
