@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { CriarBookingDto } from './dto/criar-booking.dto';
@@ -44,5 +44,12 @@ export class BookingsController {
   @Get('bookings/:id')
   buscarPorId(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.bookingsService.buscarPorId(id, req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CLIENTE)
+  @Delete('bookings/:id')
+  cancelar(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.bookingsService.cancelar(id, req.user.userId);
   }
 }

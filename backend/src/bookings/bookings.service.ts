@@ -183,6 +183,34 @@ export class BookingsService {
     if (!booking) throw new NotFoundException('Ingresso não encontrado.');
     return booking;
   }
+
+  async cancelar(id: string, clienteId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: { evento: true },
+    });
+    if (!booking) throw new NotFoundException('Ingresso não encontrado.');
+    if (booking.clienteId !== clienteId) {
+      throw new ForbiddenException('Este ingresso não pertence a você.');
+    }
+    if (booking.status !== BookingStatus.CONFIRMADO && booking.status !== BookingStatus.PENDENTE) {
+      throw new ConflictException('Este ingresso não pode mais ser cancelado.');
+    }
+    if (booking.evento.dataInicio.getTime() <= Date.now()) {
+      throw new ConflictException('Não é possível cancelar após o início do evento.');
+    }
+
+    if (booking.stripePaymentIntentId) {
+      await this.stripe.criarReembolso(booking.stripePaymentIntentId);
+    }
+
+    const [cancelada] = await this.prisma.$transaction([
+      this.prisma.booking.update({ where: { id }, data: { status: BookingStatus.CANCELADO } }),
+      this.prisma.seat.updateMany({ where: { bookingId: id }, data: { bookingId: null } }),
+    ]);
+
+    return cancelada;
+  }
 }
 
 export type { Prisma };
