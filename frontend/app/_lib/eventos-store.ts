@@ -1,0 +1,223 @@
+import { apiFetch } from "./api-client";
+import type { Evento, Publico, StatusEvento, TicketType } from "./eventos";
+
+type RolePublico = "GERAL" | "RESTRITO";
+type RoleStatus = "RASCUNHO" | "PUBLICADO";
+
+type TicketTypeBackend = {
+  id: string;
+  nome: string;
+  gratuito: boolean;
+  preco: string;
+  capacidade: number;
+  vendaInicio: string | null;
+  vendaFim: string | null;
+  publico: RolePublico;
+  descricao: string | null;
+};
+
+type EventoBackend = {
+  id: string;
+  titulo: string;
+  categoria: string;
+  assunto: string | null;
+  descricaoCompleta: string | null;
+  status: RoleStatus;
+  modalidade: "presencial" | "online";
+  cidade: string;
+  endereco: { rua: string; numero: string; bairro?: string; cidade: string; estado: string } | null;
+  linkAcesso: string | null;
+  dataInicio: string;
+  dataFim: string;
+  gradiente: string;
+  tmdbId: number | null;
+  posterUrl: string | null;
+  usaMapaAssentos: boolean;
+  organizadorId: string;
+  ticketTypes: TicketTypeBackend[];
+};
+
+export type DadosEvento = {
+  titulo: string;
+  categoria: string;
+  assunto?: string;
+  descricaoCompleta?: string;
+  modalidade: "presencial" | "online";
+  cidade: string;
+  endereco?: { rua: string; numero: string; bairro: string; cidade: string; estado: string };
+  linkAcesso?: string;
+  dataInicio: string;
+  dataFim: string;
+  gradiente: string;
+  tmdbId?: number;
+  posterUrl?: string;
+  usaMapaAssentos?: boolean;
+  status?: StatusEvento;
+  ingressos: {
+    nome: string;
+    gratuito: boolean;
+    preco: number;
+    capacidade: number;
+    vendaInicio?: string;
+    vendaFim?: string;
+    publico: Publico;
+    descricao?: string;
+  }[];
+};
+
+function publicoParaFrontend(publico: RolePublico): Publico {
+  return publico.toLowerCase() as Publico;
+}
+
+function publicoParaBackend(publico: Publico): RolePublico {
+  return publico.toUpperCase() as RolePublico;
+}
+
+function statusParaFrontend(status: RoleStatus): StatusEvento {
+  return status.toLowerCase() as StatusEvento;
+}
+
+function statusParaBackend(status: StatusEvento): RoleStatus {
+  return status.toUpperCase() as RoleStatus;
+}
+
+function ticketParaFrontend(ticket: TicketTypeBackend): TicketType {
+  return {
+    id: ticket.id,
+    nome: ticket.nome,
+    gratuito: ticket.gratuito,
+    preco: ticket.preco,
+    capacidade: ticket.capacidade,
+    vendaInicio: ticket.vendaInicio,
+    vendaFim: ticket.vendaFim,
+    publico: publicoParaFrontend(ticket.publico),
+    descricao: ticket.descricao ?? "",
+  };
+}
+
+function eventoParaFrontend(evento: EventoBackend): Evento {
+  return {
+    id: evento.id,
+    titulo: evento.titulo,
+    categoria: evento.categoria,
+    assunto: evento.assunto,
+    descricaoCompleta: evento.descricaoCompleta,
+    status: statusParaFrontend(evento.status),
+    modalidade: evento.modalidade,
+    cidade: evento.cidade,
+    endereco: evento.endereco,
+    linkAcesso: evento.linkAcesso,
+    dataInicio: evento.dataInicio,
+    dataFim: evento.dataFim,
+    gradiente: evento.gradiente,
+    tmdbId: evento.tmdbId,
+    posterUrl: evento.posterUrl,
+    usaMapaAssentos: evento.usaMapaAssentos,
+    organizadorId: evento.organizadorId,
+    ingressos: evento.ticketTypes.map(ticketParaFrontend),
+  };
+}
+
+function dadosParaBackend(dados: DadosEvento) {
+  return {
+    ...dados,
+    status: dados.status ? statusParaBackend(dados.status) : undefined,
+    ingressos: dados.ingressos.map((t) => ({
+      ...t,
+      publico: publicoParaBackend(t.publico),
+    })),
+  };
+}
+
+const eventosListeners = new Set<() => void>();
+const meusEventosListeners = new Set<() => void>();
+
+const ARRAY_VAZIO: Evento[] = [];
+
+let eventosCache: Evento[] = ARRAY_VAZIO;
+let meusEventosCache: Evento[] = ARRAY_VAZIO;
+
+export function subscribeEventos(listener: () => void) {
+  eventosListeners.add(listener);
+  return () => eventosListeners.delete(listener);
+}
+
+export function getEventosSnapshot(): Evento[] {
+  return eventosCache;
+}
+
+export function getEventosServerSnapshot(): Evento[] {
+  return ARRAY_VAZIO;
+}
+
+export function subscribeMeusEventos(listener: () => void) {
+  meusEventosListeners.add(listener);
+  return () => meusEventosListeners.delete(listener);
+}
+
+export function getMeusEventosSnapshot(): Evento[] {
+  return meusEventosCache;
+}
+
+export function getMeusEventosServerSnapshot(): Evento[] {
+  return ARRAY_VAZIO;
+}
+
+export async function carregarEventos(): Promise<void> {
+  const eventos = await apiFetch<EventoBackend[]>("/events", { auth: false });
+  eventosCache = eventos.map(eventoParaFrontend);
+  eventosListeners.forEach((listener) => listener());
+}
+
+export async function carregarMeusEventos(): Promise<void> {
+  const eventos = await apiFetch<EventoBackend[]>("/events/meus");
+  meusEventosCache = eventos.map(eventoParaFrontend);
+  meusEventosListeners.forEach((listener) => listener());
+}
+
+export async function buscarEventoPorId(id: string): Promise<Evento> {
+  const evento = await apiFetch<EventoBackend>(`/events/${id}`, { auth: false });
+  return eventoParaFrontend(evento);
+}
+
+export async function criarEvento(dados: DadosEvento): Promise<Evento> {
+  // status é extraído só para excluí-lo do payload; POST /events não aceita esse campo.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { status: _status, ...dadosCriacao } = dadosParaBackend(dados);
+  const criado = await apiFetch<EventoBackend>("/events", {
+    method: "POST",
+    body: JSON.stringify(dadosCriacao),
+  });
+
+  // POST /events sempre cria em RASCUNHO (decisão do backend) — publica em seguida
+  // para que "criar evento" continue sendo uma única ação do ponto de vista do usuário.
+  const publicado =
+    dados.status === "publicado"
+      ? await apiFetch<EventoBackend>(`/events/${criado.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "PUBLICADO" }),
+        })
+      : criado;
+
+  await carregarMeusEventos();
+  return eventoParaFrontend(publicado);
+}
+
+export async function atualizarEvento(id: string, dados: DadosEvento): Promise<Evento> {
+  const evento = await apiFetch<EventoBackend>(`/events/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(dadosParaBackend(dados)),
+  });
+  await Promise.all([carregarEventos(), carregarMeusEventos()]);
+  return eventoParaFrontend(evento);
+}
+
+export async function cancelarEvento(id: string): Promise<void> {
+  await apiFetch<EventoBackend>(`/events/${id}`, { method: "DELETE" });
+  await Promise.all([carregarEventos(), carregarMeusEventos()]);
+}
+
+export async function excluirEvento(id: string): Promise<void> {
+  await apiFetch<void>(`/events/${id}/excluir`, { method: "DELETE" });
+  await Promise.all([carregarEventos(), carregarMeusEventos()]);
+}
