@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { ApiError } from "../../_lib/api-client";
 import {
   login,
@@ -17,8 +17,19 @@ const destinoPorPapel: Record<Papel, string> = {
   portaria: "/portaria",
 };
 
-export default function AuthForm({ modo }: { modo: "login" | "registro" }) {
+// Só aceita caminhos internos (começando com "/", mas não "//" ou "/\",
+// que navegadores tratam como protocol-relative para outro domínio) —
+// evita que um ?next= malicioso mande o usuário pra fora do site.
+function destinoSeguro(next: string | null): string | null {
+  if (!next) return null;
+  if (!next.startsWith("/")) return null;
+  if (next.startsWith("//") || next.startsWith("/\\")) return null;
+  return next;
+}
+
+function AuthFormInterno({ modo }: { modo: "login" | "registro" }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -52,7 +63,8 @@ export default function AuthForm({ modo }: { modo: "login" | "registro" }) {
         modo === "login"
           ? await login(email.trim(), senha)
           : await registrar(nome.trim(), email.trim(), senha, papel);
-      router.push(destinoPorPapel[usuario.papel]);
+      const next = destinoSeguro(searchParams.get("next"));
+      router.push(next ?? destinoPorPapel[usuario.papel]);
     } catch (err) {
       setErro(
         err instanceof ApiError
@@ -142,5 +154,13 @@ export default function AuthForm({ modo }: { modo: "login" | "registro" }) {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function AuthForm(props: { modo: "login" | "registro" }) {
+  return (
+    <Suspense fallback={null}>
+      <AuthFormInterno {...props} />
+    </Suspense>
   );
 }

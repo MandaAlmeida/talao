@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 import type { Papel } from "../_lib/auth-store";
 import { useUsuario } from "../_lib/use-auth";
 import { useHidratado } from "../_lib/use-hidratado";
 
-export default function RequireRole({
+function RequireRoleInterno({
   papel,
   children,
 }: {
@@ -16,14 +16,30 @@ export default function RequireRole({
   const usuario = useUsuario();
   const router = useRouter();
   const hidratado = useHidratado();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const autorizado = usuario !== null && usuario.papel === papel;
 
   useEffect(() => {
-    if (hidratado && !autorizado) router.replace("/login");
-  }, [hidratado, autorizado, router]);
+    if (!hidratado || autorizado) return;
+    const query = searchParams.toString();
+    const urlAtual = query ? `${pathname}?${query}` : pathname;
+    router.replace(`/login?next=${encodeURIComponent(urlAtual)}`);
+  }, [hidratado, autorizado, router, pathname, searchParams]);
 
   if (!hidratado || !autorizado) return null;
 
   return <>{children}</>;
+}
+
+export default function RequireRole(props: {
+  papel: Papel;
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <RequireRoleInterno {...props} />
+    </Suspense>
+  );
 }
