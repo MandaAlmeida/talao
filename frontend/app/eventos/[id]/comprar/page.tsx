@@ -62,7 +62,7 @@ function ConteudoComprarIngresso() {
   const [sessaoId, setSessaoId] = useState<string | null>(sessaoIdParam);
   const [etapa, setEtapa] = useState<Etapa>("selecao");
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
-  const [ticketEmEdicaoId, setTicketEmEdicaoId] = useState<string | null>(null);
+  const [rascunho, setRascunho] = useState<ItemCarrinho | null>(null);
   const [disponibilidade, setDisponibilidade] = useState<Disponibilidade[]>([]);
 
   const sessaoSelecionada = evento?.sessoes.find((s) => s.id === sessaoId) ?? evento?.sessoes[0];
@@ -88,7 +88,7 @@ function ConteudoComprarIngresso() {
 
   const usaAssentos = evento?.usaMapaAssentos ?? false;
 
-  const itemEmEdicao = carrinho.find((i) => i.ticketType.id === ticketEmEdicaoId);
+  const itemEmEdicao = rascunho;
 
   useEffect(() => {
     if (!sessaoSelecionada) return;
@@ -100,7 +100,7 @@ function ConteudoComprarIngresso() {
   }, [sessaoSelecionada]);
 
   const disponibilidadeTicket = disponibilidade.find(
-    (d) => d.ticketTypeId === ticketEmEdicaoId,
+    (d) => d.ticketTypeId === rascunho?.ticketType.id,
   );
   const disponivel = disponibilidadeTicket?.disponivel ?? 0;
   const assentosOcupados = disponibilidadeTicket?.assentosOcupados ?? [];
@@ -212,44 +212,41 @@ function ConteudoComprarIngresso() {
     : false;
 
   const toggleAssento = (codigo: string) => {
-    if (!ticketEmEdicaoId) return;
-    setCarrinho((prev) =>
-      prev.map((item) =>
-        item.ticketType.id !== ticketEmEdicaoId
-          ? item
-          : {
-              ...item,
-              assentos: item.assentos.includes(codigo)
-                ? item.assentos.filter((a) => a !== codigo)
-                : [...item.assentos, codigo],
-            },
-      ),
+    setRascunho((prev) =>
+      prev === null
+        ? prev
+        : {
+            ...prev,
+            assentos: prev.assentos.includes(codigo)
+              ? prev.assentos.filter((a) => a !== codigo)
+              : [...prev.assentos, codigo],
+          },
     );
   };
 
   const definirQuantidade = (quantidade: number) => {
-    if (!ticketEmEdicaoId) return;
-    setCarrinho((prev) =>
-      prev.map((item) =>
-        item.ticketType.id !== ticketEmEdicaoId
-          ? item
-          : { ...item, quantidade, assentos: item.assentos.slice(0, quantidade) },
-      ),
+    setRascunho((prev) =>
+      prev === null ? prev : { ...prev, quantidade, assentos: prev.assentos.slice(0, quantidade) },
     );
   };
 
   const abrirItem = (ticket: TicketType) => {
-    setTicketEmEdicaoId(ticket.id);
-    setCarrinho((prev) =>
-      prev.some((i) => i.ticketType.id === ticket.id)
-        ? prev
-        : [...prev, { ticketType: ticket, quantidade: 1, assentos: [] }],
-    );
+    const jaNoCarrinho = carrinho.find((i) => i.ticketType.id === ticket.id);
+    setRascunho(jaNoCarrinho ?? { ticketType: ticket, quantidade: 1, assentos: [] });
+  };
+
+  const confirmarItem = () => {
+    if (!rascunho) return;
+    setCarrinho((prev) => {
+      const semItemAtual = prev.filter((i) => i.ticketType.id !== rascunho.ticketType.id);
+      return [...semItemAtual, rascunho];
+    });
+    setRascunho(null);
   };
 
   const removerItem = (ticketTypeId: string) => {
     setCarrinho((prev) => prev.filter((i) => i.ticketType.id !== ticketTypeId));
-    if (ticketEmEdicaoId === ticketTypeId) setTicketEmEdicaoId(null);
+    if (rascunho?.ticketType.id === ticketTypeId) setRascunho(null);
   };
 
   const validarDadosComprador = (): ErrosComprador => {
@@ -357,7 +354,7 @@ function ConteudoComprarIngresso() {
                       onClick={() => {
                         setSessaoId(sessao.id);
                         setCarrinho([]);
-                        setTicketEmEdicaoId(null);
+                        setRascunho(null);
                       }}
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                         sessao.id === sessaoSelecionada?.id
@@ -394,9 +391,11 @@ function ConteudoComprarIngresso() {
                       className={`flex items-center justify-between rounded-lg border p-4 text-left transition-colors ${
                         esgotado
                           ? "cursor-not-allowed border-zinc-200 opacity-50 dark:border-zinc-800"
-                          : carrinho.some((i) => i.ticketType.id === ticket.id)
+                          : itemEmEdicao?.ticketType.id === ticket.id
                             ? "border-zinc-900 bg-zinc-50 dark:border-zinc-50 dark:bg-zinc-800"
-                            : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
+                            : carrinho.some((i) => i.ticketType.id === ticket.id)
+                              ? "border-zinc-400 dark:border-zinc-600"
+                              : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
                       }`}
                     >
                       <div>
@@ -484,7 +483,7 @@ function ConteudoComprarIngresso() {
 
                 <button
                   type="button"
-                  onClick={() => setTicketEmEdicaoId(null)}
+                  onClick={confirmarItem}
                   disabled={!itemEmEdicaoValido}
                   className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
                 >
@@ -521,7 +520,7 @@ function ConteudoComprarIngresso() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setTicketEmEdicaoId(item.ticketType.id)}
+                          onClick={() => setRascunho(item)}
                           className="text-xs font-medium text-zinc-600 underline dark:text-zinc-400"
                         >
                           Editar
