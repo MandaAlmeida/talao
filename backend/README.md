@@ -55,7 +55,9 @@ Chave gratuita em [themoviedb.org/settings/api](https://www.themoviedb.org/setti
    ```
    O comando imprime um `whsec_...` — cole em `STRIPE_WEBHOOK_SECRET`.
 
-Sem essas duas chaves a API sobe normalmente, mas qualquer reserva de ingresso **pago** falha ao tentar criar o PaymentIntent (ingressos gratuitos continuam funcionando sem Stripe nenhum, já que nunca chamam a API).
+Sem essas duas chaves a API sobe normalmente, mas qualquer reserva de ingresso **pago** falha ao tentar criar o PaymentIntent (ingressos gratuitos continuam funcionando sem Stripe nenhum, já que nunca chamam a API). Se `STRIPE_SECRET_KEY` estiver ausente ou inválida, o erro fica registrado no log do servidor (`OrdersService`/`BookingsService`) — o cliente recebe uma mensagem genérica de erro, não o motivo.
+
+**Cartão de teste** para a etapa de pagamento (Stripe Elements no frontend): `4242 4242 4242 4242`, qualquer validade futura, qualquer CVC de 3 dígitos. Sempre aprova, sem cobrança real. Lista completa em [docs.stripe.com/testing](https://docs.stripe.com/testing#cards).
 
 ## Rodando
 
@@ -84,8 +86,8 @@ O e2e (`test/fluxo-completo.e2e-spec.ts`) sobe a aplicação inteira contra um b
 | Módulo | Rota base | Responsabilidade |
 |---|---|---|
 | `auth` | `/auth` | Registro e login (JWT) |
-| `events` | `/events` | CRUD de eventos, listagem pública com filtro por categoria/cidade/busca |
-| `bookings` | `/events/:id/bookings`, `/bookings` | Reserva, disponibilidade, "minhas reservas", compartilhamento por link, cancelamento |
+| `events` | `/events` | CRUD de eventos (com sessões e tipos de ingresso), listagem pública com filtro por categoria/cidade/busca |
+| `bookings` | `/sessoes/:sessaoId/bookings`, `/sessoes/:sessaoId/orders`, `/bookings`, `/orders` | Reserva (single-ticket, legado) e pedido (`Order`, multi-ingresso), disponibilidade, "minhas reservas", compartilhamento por link, cancelamento com reembolso |
 | `tickets` | `/tickets/validar` | Validação de ingresso na portaria |
 | `catalog` | `/catalog/filmes` | Busca de filmes no TMDb |
 | `payments` | `/webhooks/stripe` | Webhook do Stripe (confirmação/recusa de pagamento) |

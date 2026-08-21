@@ -43,7 +43,7 @@ Sem a chave do Stripe, tudo funciona normalmente exceto a etapa de pagamento de 
 | `/` | público | Lista de eventos publicados, com busca e filtro por local/categoria |
 | `/login`, `/registro` | público | Autenticação, com escolha de papel no registro |
 | `/eventos/[id]` | público | Detalhe do evento e disponibilidade de ingressos em tempo real |
-| `/eventos/[id]/comprar` | cliente | Seleção de assento (mapa) ou quantidade, dados do comprador, pagamento via Stripe Elements |
+| `/eventos/[id]/comprar` | cliente | Seleção de sessão, carrinho com múltiplos tipos de ingresso, assento (mapa) ou quantidade, pagamento via Stripe Elements — cartão de teste `4242 4242 4242 4242` |
 | `/criar-evento`, `/meus-eventos`, `/eventos/[id]/editar` | organizador | CRUD de eventos |
 | `/meus-ingressos`, `/meus-ingressos/[id]` | cliente | Ingressos comprados, QR code, cancelamento com reembolso |
 | `/portaria` | portaria | Validação de ingresso por câmera ou código digitado |

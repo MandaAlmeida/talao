@@ -11,6 +11,7 @@ Um organizador publica eventos (shows ou peças, com poster vindo do catálogo d
 
 - [Stack](#stack)
 - [Como rodar](#como-rodar)
+- [Testando o pagamento](#testando-o-pagamento)
 - [Dados de teste (seed)](#dados-de-teste-seed)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [O que foi feito e o que ficou de fora](#o-que-foi-feito-e-o-que-ficou-de-fora)
@@ -51,6 +52,19 @@ npm run dev              # http://localhost:3000
 
 O passo a passo completo — incluindo como obter as chaves do Stripe e como testar o webhook localmente — está no [README do backend](backend/README.md#stripe).
 
+### Testando o pagamento
+
+Na etapa de pagamento (Stripe Elements), use o cartão de teste:
+
+```
+Número:    4242 4242 4242 4242
+Validade:  qualquer data futura (ex: 12/34)
+CVC:       qualquer 3 dígitos (ex: 123)
+CEP:       qualquer válido (ex: 01310-100)
+```
+
+Esse é o cartão de teste padrão do Stripe — sempre aprova o pagamento (nenhuma cobrança real acontece). Para testar uma recusa, veja a lista de [cartões de teste do Stripe](https://docs.stripe.com/testing#cards) (ex: `4000 0000 0000 0002` sempre recusa).
+
 ## Dados de teste (seed)
 
 O `npx prisma db seed` cria, sem precisar montar nada manualmente:
@@ -84,8 +98,10 @@ talao/
 
 - Autenticação JWT com 3 papéis (organizador, cliente, portaria) e guards de rota por papel.
 - CRUD de eventos pelo organizador, com catálogo de filmes do TMDb para preencher título/sinopse/pôster automaticamente quando a categoria é "cinema".
-- Fluxo de reserva com **os dois modos** pedidos no desafio: mapa de assentos (para eventos com lugar marcado) e quantidade de ingressos (para pista/estoque simples).
-- Pagamento via Stripe em modo de teste (PaymentIntent + webhook assinado + reembolso automático no cancelamento) — cobrança real nunca acontece, mas o fluxo (incluindo recusa de cartão) é o mesmo que rodaria em produção.
+- Eventos com **uma ou mais sessões** (data/hora e sala próprias), cada uma com seus próprios tipos de ingresso — cobre tanto um show único quanto sessões diárias de cinema/teatro.
+- Fluxo de reserva com **os dois modos** pedidos no desafio: mapa de assentos (para eventos com lugar marcado) e quantidade de ingressos (para pista/estoque simples). Os assentos são compartilhados entre os tipos de ingresso de uma mesma sessão (ex: Inteira e Meia-entrada no cinema não vendem o mesmo lugar duas vezes); opcionalmente, um tipo pode ser restrito a um intervalo de fileiras (ex: VIP só nas fileiras A–D).
+- Carrinho com **múltiplos tipos de ingresso na mesma compra** (ex: 2 Inteiras + 1 Meia-entrada em um único pedido), com um `Order` agrupando os `Booking`s gerados.
+- Pagamento via Stripe em modo de teste (PaymentIntent + webhook assinado + reembolso automático no cancelamento) — cobrança real nunca acontece, mas o fluxo (incluindo recusa de cartão) é o mesmo que rodaria em produção. Cancelar um ingresso de uma compra com vários tipos gera reembolso parcial, sem afetar os demais itens do pedido.
 - QR code assinado com HMAC (não é só um UUID em formato de imagem — o código de compra é assinado com um segredo do servidor, então não dá pra forjar um válido sem ele).
 - Compartilhamento de ingresso por link (`shareToken` público, sem precisar de login para conferir).
 - Portaria com leitura por câmera (via `qr-scanner`) e digitação manual como alternativa, com os 4 retornos pedidos: válido, inválido, já utilizado, evento errado.
