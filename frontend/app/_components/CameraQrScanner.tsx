@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
 
+const INTERVALO_ENTRE_LEITURAS_MS = 10_000;
+
 export default function CameraQrScanner({
   ativo,
   onResultado,
@@ -12,6 +14,7 @@ export default function CameraQrScanner({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
+  const ultimaLeituraRef = useRef(0);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,7 +22,14 @@ export default function CameraQrScanner({
 
     const scanner = new QrScanner(
       videoRef.current,
-      (result) => onResultado(result.data),
+      (result) => {
+        const agora = Date.now();
+        if (agora - ultimaLeituraRef.current < INTERVALO_ENTRE_LEITURAS_MS) {
+          return;
+        }
+        ultimaLeituraRef.current = agora;
+        onResultado(result.data);
+      },
       {
         highlightScanRegion: true,
         highlightCodeOutline: true,

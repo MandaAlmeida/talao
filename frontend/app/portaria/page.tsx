@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import CameraQrScanner from "../_components/CameraQrScanner";
 import RequireRole from "../_components/RequireRole";
 import Select from "../_components/form/Select";
@@ -44,11 +44,17 @@ function ConteudoPortaria() {
   const [validando, setValidando] = useState(false);
   const [erroValidacao, setErroValidacao] = useState("");
 
+  // Guarda síncrona: `validando` (state) só reflete no próximo render, o que
+  // deixa uma janela para uma segunda leitura da câmera (mesmo QR, ainda no
+  // enquadramento) escapar da checagem antes do re-render acontecer.
+  const validandoRef = useRef(false);
+
   const validarCodigo = useCallback(
     (codigoBruto: string) => {
       const codigo = codigoBruto.trim().toUpperCase();
-      if (!codigo || !eventoId || validando) return;
+      if (!codigo || !eventoId || validandoRef.current) return;
 
+      validandoRef.current = true;
       setValidando(true);
       setErroValidacao("");
       validarTicket(codigo, eventoId)
@@ -64,9 +70,12 @@ function ConteudoPortaria() {
               : "Não foi possível validar o código agora.",
           );
         })
-        .finally(() => setValidando(false));
+        .finally(() => {
+          validandoRef.current = false;
+          setValidando(false);
+        });
     },
-    [eventoId, validando],
+    [eventoId],
   );
 
   const handleManualSubmit = (e: React.FormEvent) => {
