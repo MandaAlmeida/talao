@@ -128,6 +128,24 @@ export class BookingsService {
           );
         }
 
+        if (ticketType.sessao.dataHora.getTime() <= Date.now()) {
+          throw new ConflictException('Este evento já começou.');
+        }
+
+        if (
+          ticketType.vendaInicio &&
+          ticketType.vendaInicio.getTime() > Date.now()
+        ) {
+          throw new ConflictException(
+            `As vendas de "${ticketType.nome}" ainda não começaram.`,
+          );
+        }
+        if (ticketType.vendaFim && ticketType.vendaFim.getTime() < Date.now()) {
+          throw new ConflictException(
+            `As vendas de "${ticketType.nome}" já foram encerradas.`,
+          );
+        }
+
         const usaAssentos = evento.usaMapaAssentos;
         let quantidade: number;
 

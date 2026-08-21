@@ -27,6 +27,9 @@ describe('BookingsService (unit, mocked Prisma)', () => {
   };
   let stripeMock: { criarPaymentIntent: jest.Mock; criarReembolso: jest.Mock };
 
+  const amanha = new Date(Date.now() + 24 * 60 * 60_000);
+  const ontem = new Date(Date.now() - 24 * 60 * 60_000);
+
   beforeEach(async () => {
     tx = {
       ticketType: {
@@ -81,6 +84,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: false,
@@ -105,6 +109,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: false,
@@ -129,6 +134,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: false,
@@ -159,6 +165,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: false,
@@ -176,6 +183,83 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it('rejects reserving for a sessão that already started', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: {
+        id: 'sessao-1',
+        dataHora: ontem,
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PUBLICADO,
+        },
+      },
+    });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 1,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects reserving a ticketType whose vendaInicio has not arrived yet', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      vendaInicio: new Date(Date.now() + 60_000),
+      sessao: {
+        id: 'sessao-1',
+        dataHora: amanha,
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PUBLICADO,
+        },
+      },
+    });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 1,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects reserving a ticketType whose vendaFim already passed', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      vendaFim: new Date(Date.now() - 60_000),
+      sessao: {
+        id: 'sessao-1',
+        dataHora: amanha,
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: false,
+          status: EventStatus.PUBLICADO,
+        },
+      },
+    });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        quantidade: 1,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
   it('rejects when a requested seat is already taken', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-1',
@@ -184,6 +268,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: true,
@@ -214,6 +299,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       fileiraFim: 'A',
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: true,
@@ -244,6 +330,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: true,
@@ -265,6 +352,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: false,
@@ -307,6 +395,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: true,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: false,
@@ -349,6 +438,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       gratuito: false,
       sessao: {
         id: 'sessao-1',
+        dataHora: amanha,
         evento: {
           id: 'evento-1',
           usaMapaAssentos: true,
@@ -385,9 +475,6 @@ describe('BookingsService (unit, mocked Prisma)', () => {
   });
 
   describe('cancelar', () => {
-    const amanha = new Date(Date.now() + 24 * 60 * 60_000);
-    const ontem = new Date(Date.now() - 24 * 60 * 60_000);
-
     it('throws NotFoundException when the booking does not exist', async () => {
       prisma.booking.findUnique.mockResolvedValue(null);
 
