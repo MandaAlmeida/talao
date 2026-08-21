@@ -103,8 +103,18 @@ function ConteudoComprarIngresso() {
   const disponibilidadeTicket = disponibilidade.find(
     (d) => d.ticketTypeId === rascunho?.ticketType.id,
   );
+  // Assentos que outros itens do carrinho já reservaram localmente (a reserva
+  // só é persistida no backend ao finalizar a compra) — precisam aparecer
+  // como ocupados aqui também, já que os assentos são compartilhados entre
+  // todos os tipos de ingresso da mesma sessão.
+  const assentosJaNoCarrinho = carrinho
+    .filter((item) => item.ticketType.id !== rascunho?.ticketType.id)
+    .flatMap((item) => item.assentos);
   const disponivel = disponibilidadeTicket?.disponivel ?? 0;
-  const assentosOcupados = disponibilidadeTicket?.assentosOcupados ?? [];
+  const assentosOcupados = [
+    ...(disponibilidadeTicket?.assentosOcupados ?? []),
+    ...assentosJaNoCarrinho,
+  ];
 
   const precoItem = (item: ItemCarrinho) =>
     item.ticketType.gratuito ? 0 : (parseFloat(item.ticketType.preco) || 0) * item.quantidade;
