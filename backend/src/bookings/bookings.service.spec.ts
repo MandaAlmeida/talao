@@ -372,7 +372,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         ticketTypeId: 'ticket-1',
         assentos: ['A1'],
       }),
-    ).rejects.toThrow('Stripe indisponível');
+    ).rejects.toThrow('Não foi possível iniciar o pagamento');
 
     expect(prisma.booking.update).toHaveBeenCalledWith({
       where: { id: 'booking-1' },

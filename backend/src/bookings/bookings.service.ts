@@ -3,6 +3,8 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +27,8 @@ function calcularValorCentavos(
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
@@ -271,7 +275,11 @@ export class BookingsService {
           data: { bookingId: null },
         }),
       ]);
-      throw err;
+      const mensagem = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Falha ao criar PaymentIntent no Stripe: ${mensagem}`);
+      throw new InternalServerErrorException(
+        'Não foi possível iniciar o pagamento. Tente novamente em instantes.',
+      );
     }
 
     const atualizada = await this.prisma.booking.update({
