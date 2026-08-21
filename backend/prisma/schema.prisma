@@ -93,34 +93,36 @@ model Sessao {
   ticketTypes TicketType[]
   bookings    Booking[]
   orders      Order[]
-}
-
-model TicketType {
-  id          String         @id @default(uuid())
-  sessaoId    String
-  sessao      Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
-  nome        String
-  gratuito    Boolean        @default(false)
-  preco       Decimal        @default(0)
-  capacidade  Int
-  vendaInicio DateTime?
-  vendaFim    DateTime?
-  publico     TicketAudience @default(GERAL)
-  descricao   String?
-
-  bookings    Booking[]
   seats       Seat[]
 }
 
-model Seat {
-  id           String      @id @default(uuid())
-  ticketTypeId String
-  ticketType   TicketType  @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
-  codigo       String
-  bookingId    String?
-  booking      Booking?    @relation(fields: [bookingId], references: [id])
+model TicketType {
+  id            String         @id @default(uuid())
+  sessaoId      String
+  sessao        Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  nome          String
+  gratuito      Boolean        @default(false)
+  preco         Decimal        @default(0)
+  capacidade    Int
+  vendaInicio   DateTime?
+  vendaFim      DateTime?
+  publico       TicketAudience @default(GERAL)
+  descricao     String?
+  fileiraInicio String?
+  fileiraFim    String?
 
-  @@unique([ticketTypeId, codigo])
+  bookings      Booking[]
+}
+
+model Seat {
+  id        String  @id @default(uuid())
+  sessaoId  String
+  sessao    Sessao  @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  codigo    String
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  @@unique([sessaoId, codigo])
 }
 
 model Order {

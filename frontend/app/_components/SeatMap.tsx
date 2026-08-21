@@ -6,11 +6,13 @@ const ASSENTOS_POR_FILEIRA = 10;
 export default function SeatMap({
   selecionados,
   ocupados,
+  foraDeAlcance,
   limite,
   onToggle,
 }: {
   selecionados: string[];
   ocupados: string[];
+  foraDeAlcance: string[];
   limite: number;
   onToggle: (assento: string) => void;
 }) {
@@ -28,23 +30,28 @@ export default function SeatMap({
               const codigo = `${fileira}${numero}`;
               const ocupado = ocupados.includes(codigo);
               const selecionado = selecionados.includes(codigo);
+              const foraAlcance = foraDeAlcance.includes(codigo);
 
               return (
                 <button
                   key={codigo}
                   type="button"
-                  disabled={ocupado}
+                  disabled={ocupado || foraAlcance}
                   onClick={() => {
+                    if (foraAlcance) return;
                     if (!selecionado && selecionados.length >= limite) return;
                     onToggle(codigo);
                   }}
-                  aria-label={`Assento ${codigo}${ocupado ? " (ocupado)" : ""}`}
+                  aria-label={`Assento ${codigo}${ocupado ? " (ocupado)" : foraAlcance ? " (fora da área deste ingresso)" : ""}`}
+                  title={foraAlcance ? "Fora da área deste ingresso" : undefined}
                   className={`h-6 w-6 rounded text-[10px] font-medium transition-colors ${
                     ocupado
                       ? "cursor-not-allowed bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600"
-                      : selecionado
-                        ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900"
-                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+                      : foraAlcance
+                        ? "cursor-not-allowed bg-zinc-50 text-zinc-300 dark:bg-zinc-900 dark:text-zinc-700"
+                        : selecionado
+                          ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900"
+                          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
                   }`}
                 >
                   {numero}

@@ -17,6 +17,8 @@ import { StripeService } from '../payments/stripe.service';
 import { CriarOrderDto } from './dto/criar-order.dto';
 import { assinarCodigo, gerarCodigoCompra } from './qr.util';
 
+const FILEIRAS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
 function calcularValorCentavos(
   preco: Prisma.Decimal,
   quantidade: number,
@@ -92,9 +94,44 @@ export class OrdersService {
               );
             }
 
+            const outrosTicketTypes = await tx.ticketType.findMany({
+              where: { sessaoId, id: { not: ticketType.id } },
+              select: { id: true, fileiraInicio: true, fileiraFim: true },
+            });
+            const restritores = [
+              ...outrosTicketTypes,
+              {
+                id: ticketType.id,
+                fileiraInicio: ticketType.fileiraInicio,
+                fileiraFim: ticketType.fileiraFim,
+              },
+            ].filter((t) => t.fileiraInicio && t.fileiraFim);
+
+            const assentoPermitido = (codigo: string) => {
+              const fileira = codigo[0];
+              const donos = restritores.filter((t) => {
+                const ini = FILEIRAS.indexOf(t.fileiraInicio!);
+                const fim = FILEIRAS.indexOf(t.fileiraFim!);
+                const idx = FILEIRAS.indexOf(fileira);
+                return idx >= ini && idx <= fim;
+              });
+              return (
+                donos.length === 0 || donos.some((d) => d.id === ticketType.id)
+              );
+            };
+
+            const foraDeAlcance = item.assentos.filter(
+              (c) => !assentoPermitido(c),
+            );
+            if (foraDeAlcance.length > 0) {
+              throw new ConflictException(
+                `Assento(s) ${foraDeAlcance.join(', ')} não disponível(is) para "${ticketType.nome}".`,
+              );
+            }
+
             const assentos = await tx.seat.findMany({
               where: {
-                ticketTypeId: ticketType.id,
+                sessaoId,
                 codigo: { in: item.assentos },
               },
             });
@@ -162,7 +199,7 @@ export class OrdersService {
           if (usaAssentos && item.assentos) {
             await tx.seat.updateMany({
               where: {
-                ticketTypeId: ticketType.id,
+                sessaoId,
                 codigo: { in: item.assentos },
               },
               data: { bookingId: novaBooking.id },

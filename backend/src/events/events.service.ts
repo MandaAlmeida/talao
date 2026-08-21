@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -23,6 +24,40 @@ function codigosDeAssento(): string[] {
   return codigos;
 }
 
+function fileiraIndex(fileira: string): number {
+  return FILEIRAS.indexOf(fileira);
+}
+
+function intervalosSeSobrepoe(
+  a: { fileiraInicio?: string | null; fileiraFim?: string | null },
+  b: { fileiraInicio?: string | null; fileiraFim?: string | null },
+): boolean {
+  const aIni = fileiraIndex(a.fileiraInicio!);
+  const aFim = fileiraIndex(a.fileiraFim!);
+  const bIni = fileiraIndex(b.fileiraInicio!);
+  const bFim = fileiraIndex(b.fileiraFim!);
+  return aIni <= bFim && bIni <= aFim;
+}
+
+function validarFileirasSemSobreposicao(
+  ticketTypes: {
+    nome: string;
+    fileiraInicio?: string | null;
+    fileiraFim?: string | null;
+  }[],
+): void {
+  const restritos = ticketTypes.filter((t) => t.fileiraInicio && t.fileiraFim);
+  for (let i = 0; i < restritos.length; i++) {
+    for (let j = i + 1; j < restritos.length; j++) {
+      if (intervalosSeSobrepoe(restritos[i], restritos[j])) {
+        throw new BadRequestException(
+          `Os tipos de ingresso "${restritos[i].nome}" e "${restritos[j].nome}" têm fileiras sobrepostas.`,
+        );
+      }
+    }
+  }
+}
+
 // A "janela" do evento (dataInicio/dataFim) é derivada das sessões — a mais
 // cedo e a mais tarde — em vez de informada manualmente pelo organizador.
 function calcularJanela(sessoes: { dataHora: string }[]) {
@@ -38,6 +73,10 @@ export class EventsService {
   constructor(private prisma: PrismaService) {}
 
   async criar(organizadorId: string, dto: CriarEventoDto) {
+    for (const sessao of dto.sessoes) {
+      validarFileirasSemSobreposicao(sessao.ingressos);
+    }
+
     const { dataInicio, dataFim } = calcularJanela(dto.sessoes);
 
     const evento = await this.prisma.event.create({
@@ -74,6 +113,8 @@ export class EventsService {
                 vendaFim: t.vendaFim ? new Date(t.vendaFim) : undefined,
                 publico: t.publico,
                 descricao: t.descricao,
+                fileiraInicio: t.fileiraInicio,
+                fileiraFim: t.fileiraFim,
               })),
             },
           })),
@@ -84,14 +125,12 @@ export class EventsService {
 
     if (evento.usaMapaAssentos) {
       for (const sessao of evento.sessoes) {
-        for (const ticketType of sessao.ticketTypes) {
-          await this.prisma.seat.createMany({
-            data: codigosDeAssento().map((codigo) => ({
-              ticketTypeId: ticketType.id,
-              codigo,
-            })),
-          });
-        }
+        await this.prisma.seat.createMany({
+          data: codigosDeAssento().map((codigo) => ({
+            sessaoId: sessao.id,
+            codigo,
+          })),
+        });
       }
     }
 
@@ -208,12 +247,18 @@ export class EventsService {
     const evento = await this.prisma.event.findUnique({
       where: { id },
       include: {
-        sessoes: { include: { ticketTypes: { include: { seats: true } } } },
+        sessoes: { include: { ticketTypes: true, seats: true } },
       },
     });
     if (!evento) throw new NotFoundException('Evento não encontrado.');
     if (evento.organizadorId !== organizadorId) {
       throw new ForbiddenException('Você não é o organizador deste evento.');
+    }
+
+    if (dto.sessoes) {
+      for (const sessao of dto.sessoes) {
+        validarFileirasSemSobreposicao(sessao.ingressos);
+      }
     }
 
     const {
@@ -235,15 +280,13 @@ export class EventsService {
       dto.usaMapaAssentos === true && !evento.usaMapaAssentos;
     if (ligandoMapaAssentos) {
       for (const sessao of evento.sessoes) {
-        for (const ticketType of sessao.ticketTypes) {
-          if (ticketType.seats.length > 0) continue;
-          await this.prisma.seat.createMany({
-            data: codigosDeAssento().map((codigo) => ({
-              ticketTypeId: ticketType.id,
-              codigo,
-            })),
-          });
-        }
+        if (sessao.seats.length > 0) continue;
+        await this.prisma.seat.createMany({
+          data: codigosDeAssento().map((codigo) => ({
+            sessaoId: sessao.id,
+            codigo,
+          })),
+        });
       }
     }
 

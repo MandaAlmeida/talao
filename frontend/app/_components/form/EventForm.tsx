@@ -211,6 +211,8 @@ export default function EventForm({
           vendaFim: t.vendaFim ?? undefined,
           publico: t.publico,
           descricao: t.descricao,
+          fileiraInicio: t.fileiraInicio ?? undefined,
+          fileiraFim: t.fileiraFim ?? undefined,
         })),
       })),
     };
@@ -507,6 +509,7 @@ export default function EventForm({
                   onRemove={() => removerSessao(sessao.id)}
                   removable={sessoes.length > 1}
                   errors={erros.sessoes?.[sessao.id] ?? {}}
+                  usaMapaAssentos={usaMapaAssentos}
                 />
               ))}
             </div>

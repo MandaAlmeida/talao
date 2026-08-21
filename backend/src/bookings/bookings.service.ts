@@ -12,6 +12,8 @@ import { StripeService } from '../payments/stripe.service';
 import { CriarBookingDto } from './dto/criar-booking.dto';
 import { assinarCodigo, gerarCodigoCompra } from './qr.util';
 
+const FILEIRAS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
 function calcularValorCentavos(
   preco: Prisma.Decimal,
   quantidade: number,
@@ -30,33 +32,65 @@ export class BookingsService {
   ) {}
 
   async disponibilidade(sessaoId: string) {
-    const ticketTypes = await this.prisma.ticketType.findMany({
-      where: { sessaoId },
+    const sessao = await this.prisma.sessao.findUnique({
+      where: { id: sessaoId },
       include: {
         seats: true,
-        bookings: {
-          where: {
-            status: {
-              in: [
-                BookingStatus.CONFIRMADO,
-                BookingStatus.USADO,
-                BookingStatus.PENDENTE,
-              ],
+        ticketTypes: {
+          include: {
+            bookings: {
+              where: {
+                status: {
+                  in: [
+                    BookingStatus.CONFIRMADO,
+                    BookingStatus.USADO,
+                    BookingStatus.PENDENTE,
+                  ],
+                },
+              },
             },
           },
         },
       },
     });
 
-    return ticketTypes.map((tt) => {
+    if (!sessao) return [];
+
+    const restritoresPorFileira = new Map<string, string[]>();
+    for (const tt of sessao.ticketTypes) {
+      if (!tt.fileiraInicio || !tt.fileiraFim) continue;
+      const ini = FILEIRAS.indexOf(tt.fileiraInicio);
+      const fim = FILEIRAS.indexOf(tt.fileiraFim);
+      for (let i = ini; i <= fim; i++) {
+        const fileira = FILEIRAS[i];
+        restritoresPorFileira.set(fileira, [
+          ...(restritoresPorFileira.get(fileira) ?? []),
+          tt.id,
+        ]);
+      }
+    }
+
+    const assentoPermitido = (codigo: string, ticketTypeId: string) => {
+      const fileira = codigo[0];
+      const restritores = restritoresPorFileira.get(fileira);
+      return !restritores || restritores.includes(ticketTypeId);
+    };
+
+    return sessao.ticketTypes.map((tt) => {
+      const assentosPermitidos = sessao.seats.filter((s) =>
+        assentoPermitido(s.codigo, tt.id),
+      );
       const vendidos = tt.bookings.reduce(
         (total, b) => total + b.quantidade,
         0,
       );
+      const usaAssentos = sessao.seats.length > 0;
       return {
         ticketTypeId: tt.id,
-        disponivel: Math.max(0, tt.capacidade - vendidos),
-        assentosOcupados: tt.seats
+        disponivel: usaAssentos
+          ? assentosPermitidos.filter((s) => !s.bookingId).length
+          : Math.max(0, tt.capacidade - vendidos),
+        assentosOcupados: assentosPermitidos
           .filter((s) => s.bookingId)
           .map((s) => s.codigo),
       };
@@ -101,9 +135,44 @@ export class BookingsService {
           }
           quantidade = dto.assentos.length;
 
+          const outrosTicketTypes = await tx.ticketType.findMany({
+            where: { sessaoId, id: { not: ticketType.id } },
+            select: { id: true, fileiraInicio: true, fileiraFim: true },
+          });
+          const restritores = [
+            ...outrosTicketTypes,
+            {
+              id: ticketType.id,
+              fileiraInicio: ticketType.fileiraInicio,
+              fileiraFim: ticketType.fileiraFim,
+            },
+          ].filter((t) => t.fileiraInicio && t.fileiraFim);
+
+          const assentoPermitido = (codigo: string) => {
+            const fileira = codigo[0];
+            const donos = restritores.filter((t) => {
+              const ini = FILEIRAS.indexOf(t.fileiraInicio!);
+              const fim = FILEIRAS.indexOf(t.fileiraFim!);
+              const idx = FILEIRAS.indexOf(fileira);
+              return idx >= ini && idx <= fim;
+            });
+            return (
+              donos.length === 0 || donos.some((d) => d.id === ticketType.id)
+            );
+          };
+
+          const foraDeAlcance = dto.assentos.filter(
+            (c) => !assentoPermitido(c),
+          );
+          if (foraDeAlcance.length > 0) {
+            throw new ConflictException(
+              `Assento(s) ${foraDeAlcance.join(', ')} não disponível(is) para este tipo.`,
+            );
+          }
+
           const assentos = await tx.seat.findMany({
             where: {
-              ticketTypeId: ticketType.id,
+              sessaoId,
               codigo: { in: dto.assentos },
             },
           });
@@ -170,7 +239,7 @@ export class BookingsService {
         if (usaAssentos && dto.assentos) {
           await tx.seat.updateMany({
             where: {
-              ticketTypeId: ticketType.id,
+              sessaoId,
               codigo: { in: dto.assentos },
             },
             data: { bookingId: novaBooking.id },

@@ -1,4 +1,10 @@
-import { PrismaClient, Role, EventStatus, TicketAudience, BookingStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  EventStatus,
+  TicketAudience,
+  BookingStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -150,7 +156,9 @@ async function main() {
         ],
       },
     },
-    include: { sessoes: { include: { ticketTypes: true }, orderBy: { dataHora: 'asc' } } },
+    include: {
+      sessoes: { include: { ticketTypes: true }, orderBy: { dataHora: 'asc' } },
+    },
   });
 
   const sessaoTeatro1 = eventoTeatro.sessoes[0];
@@ -158,7 +166,7 @@ async function main() {
 
   await prisma.seat.createMany({
     data: codigosDeAssento().map((codigo) => ({
-      ticketTypeId: ticketTeatro.id,
+      sessaoId: sessaoTeatro1.id,
       codigo,
     })),
   });
@@ -213,7 +221,7 @@ async function main() {
 
   // Assentos A1, A2 ocupados por uma booking confirmada (cliente1)
   const seatsParaReservar = await prisma.seat.findMany({
-    where: { ticketTypeId: ticketTeatro.id, codigo: { in: ['A1', 'A2'] } },
+    where: { sessaoId: sessaoTeatro1.id, codigo: { in: ['A1', 'A2'] } },
   });
 
   const codigoTeatro = gerarCodigoCompra();

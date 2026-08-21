@@ -15,6 +15,7 @@ export default function SessaoCard({
   onRemove,
   removable,
   errors,
+  usaMapaAssentos,
 }: {
   sessao: Sessao;
   index: number;
@@ -22,6 +23,7 @@ export default function SessaoCard({
   onRemove: () => void;
   removable: boolean;
   errors: SessaoErros;
+  usaMapaAssentos: boolean;
 }) {
   const set = <K extends keyof Sessao>(key: K, value: Sessao[K]) =>
     onChange({ ...sessao, [key]: value });
@@ -85,6 +87,7 @@ export default function SessaoCard({
               onRemove={() => removerTicket(ticket.id)}
               removable={sessao.ingressos.length > 1}
               errors={errors.tickets?.[ticket.id] ?? {}}
+              usaMapaAssentos={usaMapaAssentos}
             />
           ))}
         </div>

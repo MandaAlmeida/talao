@@ -14,6 +14,8 @@ type TicketTypeBackend = {
   vendaFim: string | null;
   publico: RolePublico;
   descricao: string | null;
+  fileiraInicio: string | null;
+  fileiraFim: string | null;
 };
 
 type TicketTypeComMetricasBackend = TicketTypeBackend & { vendidos: number };
@@ -83,6 +85,8 @@ export type DadosEvento = {
       vendaFim?: string;
       publico: Publico;
       descricao?: string;
+      fileiraInicio?: string;
+      fileiraFim?: string;
     }[];
   }[];
 };
@@ -128,6 +132,8 @@ function ticketParaFrontend(ticket: TicketTypeBackend): TicketType {
     vendaFim: ticket.vendaFim,
     publico: publicoParaFrontend(ticket.publico),
     descricao: ticket.descricao ?? "",
+    fileiraInicio: ticket.fileiraInicio,
+    fileiraFim: ticket.fileiraFim,
   };
 }
 

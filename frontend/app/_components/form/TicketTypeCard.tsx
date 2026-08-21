@@ -3,6 +3,8 @@ import FormField, { dateInputClass, inputClass } from "./FormField";
 import SegmentedControl from "./SegmentedControl";
 import Select from "./Select";
 
+const FILEIRAS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
 export default function TicketTypeCard({
   ticket,
   index,
@@ -10,6 +12,7 @@ export default function TicketTypeCard({
   onRemove,
   removable,
   errors,
+  usaMapaAssentos,
 }: {
   ticket: TicketType;
   index: number;
@@ -17,6 +20,7 @@ export default function TicketTypeCard({
   onRemove: () => void;
   removable: boolean;
   errors: Partial<Record<keyof TicketType, string>>;
+  usaMapaAssentos: boolean;
 }) {
   const set = <K extends keyof TicketType>(key: K, value: TicketType[K]) =>
     onChange({ ...ticket, [key]: value });
@@ -130,6 +134,43 @@ export default function TicketTypeCard({
             className={inputClass}
           />
         </FormField>
+
+        {usaMapaAssentos && (
+          <div className="rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={ticket.fileiraInicio !== null}
+                onChange={(e) =>
+                  onChange({
+                    ...ticket,
+                    fileiraInicio: e.target.checked ? "A" : null,
+                    fileiraFim: e.target.checked ? "A" : null,
+                  })
+                }
+              />
+              Restringir a fileiras específicas
+            </label>
+            {ticket.fileiraInicio !== null && (
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <FormField label="De">
+                  <Select
+                    value={ticket.fileiraInicio}
+                    onChange={(v) => set("fileiraInicio", v)}
+                    options={FILEIRAS.map((f) => ({ value: f, label: f }))}
+                  />
+                </FormField>
+                <FormField label="Até">
+                  <Select
+                    value={ticket.fileiraFim ?? ticket.fileiraInicio}
+                    onChange={(v) => set("fileiraFim", v)}
+                    options={FILEIRAS.map((f) => ({ value: f, label: f }))}
+                  />
+                </FormField>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

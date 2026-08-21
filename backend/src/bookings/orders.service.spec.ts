@@ -23,7 +23,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
     seat: { updateMany: jest.Mock };
   };
   let tx: {
-    ticketType: { findUnique: jest.Mock };
+    ticketType: { findUnique: jest.Mock; findMany: jest.Mock };
     seat: { findMany: jest.Mock; updateMany: jest.Mock };
     booking: { aggregate: jest.Mock; create: jest.Mock; updateMany: jest.Mock };
     order: { create: jest.Mock; update: jest.Mock };
@@ -38,7 +38,10 @@ describe('OrdersService (unit, mocked Prisma)', () => {
 
   beforeEach(async () => {
     tx = {
-      ticketType: { findUnique: jest.fn() },
+      ticketType: {
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       seat: { findMany: jest.fn(), updateMany: jest.fn() },
       booking: {
         aggregate: jest.fn(),
@@ -107,6 +110,36 @@ describe('OrdersService (unit, mocked Prisma)', () => {
         itens: [{ ticketTypeId: 'ticket-1', quantidade: 2, assentos: ['A1'] }],
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a seat outside the fileira permitted for the ticketType', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-vip',
+      nome: 'VIP',
+      capacidade: 10,
+      preco: { toString: () => '100' },
+      gratuito: false,
+      fileiraInicio: 'A',
+      fileiraFim: 'A',
+      sessao: {
+        id: 'sessao-1',
+        evento: { ...eventoBase, usaMapaAssentos: true },
+      },
+    });
+    tx.seat.findMany.mockResolvedValue([
+      { codigo: 'B1', sessaoId: 'sessao-1', bookingId: null },
+    ]);
+    tx.ticketType.findMany.mockResolvedValue([
+      { id: 'ticket-inteira', fileiraInicio: 'B', fileiraFim: 'H' },
+    ]);
+
+    await expect(
+      service.criar('cliente-1', 'sessao-1', {
+        itens: [
+          { ticketTypeId: 'ticket-vip', quantidade: 1, assentos: ['B1'] },
+        ],
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('rejects an unknown ticketTypeId', async () => {

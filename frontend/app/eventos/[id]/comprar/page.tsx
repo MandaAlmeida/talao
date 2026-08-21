@@ -108,6 +108,39 @@ function ConteudoComprarIngresso() {
   const precoItem = (item: ItemCarrinho) =>
     item.ticketType.gratuito ? 0 : (parseFloat(item.ticketType.preco) || 0) * item.quantidade;
 
+  const FILEIRAS_ORDEM = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+  const foraDeAlcanceParaTipo = (ticketType: TicketType): string[] => {
+    if (!sessaoSelecionada) return [];
+    const outros = sessaoSelecionada.ingressos.filter((t) => t.id !== ticketType.id);
+    const restritoresOutros = outros.filter((t) => t.fileiraInicio && t.fileiraFim);
+    const proprioRestrito = ticketType.fileiraInicio && ticketType.fileiraFim;
+
+    const codigos: string[] = [];
+    for (const fileira of FILEIRAS_ORDEM) {
+      for (let i = 1; i <= 10; i++) {
+        const codigo = `${fileira}${i}`;
+        const restritoPorOutro = restritoresOutros.some((t) => {
+          const ini = FILEIRAS_ORDEM.indexOf(t.fileiraInicio!);
+          const fim = FILEIRAS_ORDEM.indexOf(t.fileiraFim!);
+          const idx = FILEIRAS_ORDEM.indexOf(fileira);
+          return idx >= ini && idx <= fim;
+        });
+        const dentroDoProprio =
+          !proprioRestrito ||
+          (() => {
+            const ini = FILEIRAS_ORDEM.indexOf(ticketType.fileiraInicio!);
+            const fim = FILEIRAS_ORDEM.indexOf(ticketType.fileiraFim!);
+            const idx = FILEIRAS_ORDEM.indexOf(fileira);
+            return idx >= ini && idx <= fim;
+          })();
+
+        if (restritoPorOutro || !dentroDoProprio) codigos.push(codigo);
+      }
+    }
+    return codigos;
+  };
+
   const totalCarrinho = useMemo(
     () => carrinho.reduce((soma, item) => soma + precoItem(item), 0),
     [carrinho],
@@ -429,6 +462,7 @@ function ConteudoComprarIngresso() {
                       <SeatMap
                         selecionados={itemEmEdicao.assentos}
                         ocupados={assentosOcupados}
+                        foraDeAlcance={foraDeAlcanceParaTipo(itemEmEdicao.ticketType)}
                         limite={itemEmEdicao.quantidade}
                         onToggle={toggleAssento}
                       />

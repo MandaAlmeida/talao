@@ -12,6 +12,8 @@ export type TicketType = {
   vendaFim: string | null;
   publico: Publico;
   descricao: string;
+  fileiraInicio: string | null;
+  fileiraFim: string | null;
 };
 
 export function novoTicketType(): TicketType {
@@ -25,6 +27,8 @@ export function novoTicketType(): TicketType {
     vendaFim: null,
     publico: "geral",
     descricao: "",
+    fileiraInicio: null,
+    fileiraFim: null,
   };
 }
 

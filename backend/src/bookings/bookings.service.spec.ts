@@ -18,9 +18,10 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     booking: { update: jest.Mock; findUnique: jest.Mock };
     seat: { updateMany: jest.Mock };
     order: { findUnique: jest.Mock };
+    sessao: { findUnique: jest.Mock };
   };
   let tx: {
-    ticketType: { findUnique: jest.Mock };
+    ticketType: { findUnique: jest.Mock; findMany: jest.Mock };
     seat: { findMany: jest.Mock; updateMany: jest.Mock };
     booking: { aggregate: jest.Mock; create: jest.Mock };
   };
@@ -28,7 +29,10 @@ describe('BookingsService (unit, mocked Prisma)', () => {
 
   beforeEach(async () => {
     tx = {
-      ticketType: { findUnique: jest.fn() },
+      ticketType: {
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       seat: { findMany: jest.fn(), updateMany: jest.fn() },
       booking: { aggregate: jest.fn(), create: jest.fn() },
     };
@@ -46,6 +50,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       },
       seat: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       order: { findUnique: jest.fn() },
+      sessao: { findUnique: jest.fn() },
     };
     stripeMock = {
       criarPaymentIntent: jest
@@ -195,6 +200,38 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       service.reservar('cliente-1', 'sessao-1', {
         ticketTypeId: 'ticket-1',
         assentos: ['A1', 'A2'],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects a seat outside the fileira permitted for the ticketType', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-vip',
+      capacidade: 10,
+      preco: { toString: () => '100' },
+      gratuito: false,
+      fileiraInicio: 'A',
+      fileiraFim: 'A',
+      sessao: {
+        id: 'sessao-1',
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: true,
+          status: EventStatus.PUBLICADO,
+        },
+      },
+    });
+    tx.seat.findMany.mockResolvedValue([
+      { codigo: 'B1', sessaoId: 'sessao-1', bookingId: null },
+    ]);
+    tx.ticketType.findMany.mockResolvedValue([
+      { id: 'ticket-inteira', fileiraInicio: 'B', fileiraFim: 'H' },
+    ]);
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-vip',
+        assentos: ['B1'],
       }),
     ).rejects.toThrow(ConflictException);
   });
@@ -459,6 +496,82 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       await service.cancelar('booking-1', 'cliente-1');
 
       expect(stripeMock.criarReembolso).toHaveBeenCalledWith('pi_order', 1500);
+    });
+  });
+
+  describe('disponibilidade (assentos compartilhados por sessão)', () => {
+    it('shares seat availability across ticketTypes with no fileira restriction', async () => {
+      prisma.sessao.findUnique.mockResolvedValue({
+        id: 'sessao-1',
+        seats: [
+          { codigo: 'A1', bookingId: null },
+          { codigo: 'A2', bookingId: 'booking-existente' },
+        ],
+        ticketTypes: [
+          {
+            id: 'ticket-inteira',
+            fileiraInicio: null,
+            fileiraFim: null,
+            capacidade: 80,
+            bookings: [],
+          },
+          {
+            id: 'ticket-meia',
+            fileiraInicio: null,
+            fileiraFim: null,
+            capacidade: 80,
+            bookings: [],
+          },
+        ],
+      });
+
+      const resultado = await service.disponibilidade('sessao-1');
+
+      const inteira = resultado.find(
+        (r) => r.ticketTypeId === 'ticket-inteira',
+      )!;
+      const meia = resultado.find((r) => r.ticketTypeId === 'ticket-meia')!;
+      expect(inteira.assentosOcupados).toEqual(['A2']);
+      expect(meia.assentosOcupados).toEqual(['A2']);
+    });
+
+    it('excludes seats restricted to another ticketType from disponivel/ocupados', async () => {
+      prisma.sessao.findUnique.mockResolvedValue({
+        id: 'sessao-1',
+        seats: [
+          { codigo: 'A1', bookingId: null },
+          { codigo: 'B1', bookingId: null },
+        ],
+        ticketTypes: [
+          {
+            id: 'ticket-vip',
+            fileiraInicio: 'A',
+            fileiraFim: 'A',
+            capacidade: 10,
+            bookings: [],
+          },
+          {
+            id: 'ticket-inteira',
+            fileiraInicio: null,
+            fileiraFim: null,
+            capacidade: 70,
+            bookings: [],
+          },
+        ],
+      });
+
+      const resultado = await service.disponibilidade('sessao-1');
+
+      const vip = resultado.find((r) => r.ticketTypeId === 'ticket-vip')!;
+      const inteira = resultado.find(
+        (r) => r.ticketTypeId === 'ticket-inteira',
+      )!;
+      // VIP restringe a fileira A para si, mas fileira B não tem nenhum
+      // restritor — então VIP também pode vender B1 (sem restrição = livre
+      // para todos). Inteira não tem restrição própria, mas A1 é exclusivo
+      // do VIP, então Inteira só enxerga B1.
+      expect(vip.disponivel).toBe(2);
+      expect(inteira.disponivel).toBe(1);
     });
   });
 });

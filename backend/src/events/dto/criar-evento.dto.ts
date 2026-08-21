@@ -61,6 +61,14 @@ class TicketTypeDto {
   @IsOptional()
   @IsString()
   descricao?: string;
+
+  @IsOptional()
+  @IsIn(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'])
+  fileiraInicio?: string;
+
+  @IsOptional()
+  @IsIn(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'])
+  fileiraFim?: string;
 }
 
 class SessaoDto {
