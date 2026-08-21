@@ -64,6 +64,7 @@ function ConteudoComprarIngresso() {
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [rascunho, setRascunho] = useState<ItemCarrinho | null>(null);
   const [disponibilidade, setDisponibilidade] = useState<Disponibilidade[]>([]);
+  const [agora] = useState(() => Date.now());
 
   const sessaoSelecionada = evento?.sessoes.find((s) => s.id === sessaoId) ?? evento?.sessoes[0];
 
@@ -151,6 +152,20 @@ function ConteudoComprarIngresso() {
     return d ? d.disponivel === 0 : false;
   });
 
+  const sessaoJaComecou = sessaoSelecionada
+    ? new Date(sessaoSelecionada.dataHora).getTime() <= agora
+    : false;
+
+  const foraDaJanelaDeVenda = (ticket: TicketType): "encerrada" | "naoAberta" | null => {
+    if (ticket.vendaFim && new Date(ticket.vendaFim).getTime() < agora) {
+      return "encerrada";
+    }
+    if (ticket.vendaInicio && new Date(ticket.vendaInicio).getTime() > agora) {
+      return "naoAberta";
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (existeIngressoEsgotado) {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -202,6 +217,7 @@ function ConteudoComprarIngresso() {
 
   const podeAvancar =
     sessaoSelecionada !== undefined &&
+    !sessaoJaComecou &&
     carrinho.length > 0 &&
     carrinho.every(itemValido);
 
@@ -369,57 +385,80 @@ function ConteudoComprarIngresso() {
               </section>
             )}
 
-            <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                Escolha o tipo de ingresso
-              </h2>
-              <div className="mt-4 flex flex-col gap-3">
-                {ingressos.map((ticket) => {
-                  const d = disponibilidade.find(
-                    (item) => item.ticketTypeId === ticket.id,
-                  );
-                  const restam = d?.disponivel ?? ticket.capacidade;
-                  const esgotado = restam === 0;
+            {sessaoJaComecou ? (
+              <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-900 dark:bg-amber-950">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  Este evento já começou.
+                </p>
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  {evento.sessoes.length > 1
+                    ? "Escolha outra sessão para comprar ingressos."
+                    : "Não é mais possível comprar ingressos para esta sessão."}
+                </p>
+              </section>
+            ) : (
+              <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                  Escolha o tipo de ingresso
+                </h2>
+                <div className="mt-4 flex flex-col gap-3">
+                  {ingressos.map((ticket) => {
+                    const d = disponibilidade.find(
+                      (item) => item.ticketTypeId === ticket.id,
+                    );
+                    const restam = d?.disponivel ?? ticket.capacidade;
+                    const esgotado = restam === 0;
+                    const janela = foraDaJanelaDeVenda(ticket);
+                    const indisponivel = esgotado || janela !== null;
 
-                  return (
-                    <button
-                      key={ticket.id}
-                      type="button"
-                      disabled={esgotado}
-                      onClick={() => abrirItem(ticket)}
-                      className={`flex items-center justify-between rounded-lg border p-4 text-left transition-colors ${
-                        esgotado
-                          ? "cursor-not-allowed border-zinc-200 opacity-50 dark:border-zinc-800"
-                          : itemEmEdicao?.ticketType.id === ticket.id
-                            ? "border-zinc-900 bg-zinc-50 dark:border-zinc-50 dark:bg-zinc-800"
-                            : carrinho.some((i) => i.ticketType.id === ticket.id)
-                              ? "border-zinc-400 dark:border-zinc-600"
-                              : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
-                      }`}
-                    >
-                      <div>
-                        <p className="font-semibold text-zinc-900 dark:text-zinc-50">
-                          {ticket.nome}
-                        </p>
-                        {ticket.descricao && (
-                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            {ticket.descricao}
+                    const rotulo = esgotado
+                      ? "Esgotado"
+                      : janela === "encerrada"
+                        ? "Vendas encerradas"
+                        : janela === "naoAberta"
+                          ? "Vendas ainda não abertas"
+                          : `${restam} disponíveis`;
+
+                    return (
+                      <button
+                        key={ticket.id}
+                        type="button"
+                        disabled={indisponivel}
+                        onClick={() => abrirItem(ticket)}
+                        className={`flex items-center justify-between rounded-lg border p-4 text-left transition-colors ${
+                          indisponivel
+                            ? "cursor-not-allowed border-zinc-200 opacity-50 dark:border-zinc-800"
+                            : itemEmEdicao?.ticketType.id === ticket.id
+                              ? "border-zinc-900 bg-zinc-50 dark:border-zinc-50 dark:bg-zinc-800"
+                              : carrinho.some((i) => i.ticketType.id === ticket.id)
+                                ? "border-zinc-400 dark:border-zinc-600"
+                                : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
+                        }`}
+                      >
+                        <div>
+                          <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                            {ticket.nome}
                           </p>
-                        )}
-                        <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-                          {esgotado ? "Esgotado" : `${restam} disponíveis`}
+                          {ticket.descricao && (
+                            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                              {ticket.descricao}
+                            </p>
+                          )}
+                          <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+                            {rotulo}
+                          </p>
+                        </div>
+                        <p className="font-bold text-zinc-900 dark:text-zinc-50">
+                          {ticket.gratuito ? "Gratuito" : `R$ ${ticket.preco}`}
                         </p>
-                      </div>
-                      <p className="font-bold text-zinc-900 dark:text-zinc-50">
-                        {ticket.gratuito ? "Gratuito" : `R$ ${ticket.preco}`}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-            {itemEmEdicao && (
+            {!sessaoJaComecou && itemEmEdicao && (
               <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                   {itemEmEdicao.ticketType.nome}
@@ -491,7 +530,7 @@ function ConteudoComprarIngresso() {
               </section>
             )}
 
-            {carrinho.length > 0 && (
+            {!sessaoJaComecou && carrinho.length > 0 && (
               <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                   Seu carrinho
