@@ -80,15 +80,15 @@ async function main() {
     },
   });
 
-  // Evento 1: categoria teatro, com mapa de assentos, 3 sessões diárias
-  const eventoTeatro = await prisma.event.create({
+  // Evento 1: categoria cinema, com mapa de assentos, 3 sessões diárias
+  const eventoCinema1 = await prisma.event.create({
     data: {
-      titulo: 'Marrom, o Musical',
-      categoria: 'teatro',
+      titulo: 'Homem-Aranha: Um Novo Dia',
+      categoria: 'cinema',
       usaMapaAssentos: true,
-      assunto: 'Música e teatro',
+      assunto: 'Ação e aventura',
       descricaoCompleta:
-        'Um espetáculo musical que celebra a trajetória de Alcione, com direção de Miguel Falabella.',
+        'Peter Parker enfrenta uma nova ameaça que coloca em risco tudo o que ele conhece, em mais um capítulo da saga do Homem-Aranha.',
       status: EventStatus.PUBLICADO,
       modalidade: 'presencial',
       cidade: 'Brasília - DF',
@@ -161,24 +161,24 @@ async function main() {
     },
   });
 
-  const sessaoTeatro1 = eventoTeatro.sessoes[0];
-  const ticketTeatro = sessaoTeatro1.ticketTypes[0];
+  const sessaoCinema1a = eventoCinema1.sessoes[0];
+  const ticketCinema1 = sessaoCinema1a.ticketTypes[0];
 
   await prisma.seat.createMany({
     data: codigosDeAssento().map((codigo) => ({
-      sessaoId: sessaoTeatro1.id,
+      sessaoId: sessaoCinema1a.id,
       codigo,
     })),
   });
 
-  // Evento 2: categoria show, sessão única, estoque por quantidade
-  const eventoShow = await prisma.event.create({
+  // Evento 2: categoria cinema, sessão única, estoque por quantidade
+  const eventoCinema2 = await prisma.event.create({
     data: {
-      titulo: 'Noite do Rock',
-      categoria: 'show',
-      assunto: 'Show de rock nacional',
+      titulo: 'Toy Story 5',
+      categoria: 'cinema',
+      assunto: 'Animação e família',
       descricaoCompleta:
-        'Uma noite com as principais bandas de rock da cena nacional em um só palco.',
+        'Woody, Buzz e o resto da turma embarcam em uma nova aventura cheia de emoção para toda a família.',
       status: EventStatus.PUBLICADO,
       modalidade: 'presencial',
       cidade: 'São Paulo - SP',
@@ -216,50 +216,52 @@ async function main() {
     include: { sessoes: { include: { ticketTypes: true } } },
   });
 
-  const sessaoShow = eventoShow.sessoes[0];
-  const ticketShow = sessaoShow.ticketTypes[0];
+  const sessaoCinema2 = eventoCinema2.sessoes[0];
+  const ticketCinema2 = sessaoCinema2.ticketTypes[0];
 
   // Assentos A1, A2 ocupados por uma booking confirmada (cliente1)
   const seatsParaReservar = await prisma.seat.findMany({
-    where: { sessaoId: sessaoTeatro1.id, codigo: { in: ['A1', 'A2'] } },
+    where: { sessaoId: sessaoCinema1a.id, codigo: { in: ['A1', 'A2'] } },
   });
 
-  const codigoTeatro = gerarCodigoCompra();
-  const bookingTeatro = await prisma.booking.create({
+  const codigoCinema1 = gerarCodigoCompra();
+  const bookingCinema1 = await prisma.booking.create({
     data: {
-      eventoId: eventoTeatro.id,
-      sessaoId: sessaoTeatro1.id,
-      ticketTypeId: ticketTeatro.id,
+      eventoId: eventoCinema1.id,
+      sessaoId: sessaoCinema1a.id,
+      ticketTypeId: ticketCinema1.id,
       clienteId: cliente1.id,
       quantidade: 2,
       status: BookingStatus.CONFIRMADO,
-      codigoCompra: codigoTeatro,
-      qrAssinatura: assinar(codigoTeatro),
+      codigoCompra: codigoCinema1,
+      qrAssinatura: assinar(codigoCinema1),
     },
   });
 
   await prisma.seat.updateMany({
     where: { id: { in: seatsParaReservar.map((s) => s.id) } },
-    data: { bookingId: bookingTeatro.id },
+    data: { bookingId: bookingCinema1.id },
   });
 
-  const codigoShow = gerarCodigoCompra();
+  const codigoCinema2 = gerarCodigoCompra();
   await prisma.booking.create({
     data: {
-      eventoId: eventoShow.id,
-      sessaoId: sessaoShow.id,
-      ticketTypeId: ticketShow.id,
+      eventoId: eventoCinema2.id,
+      sessaoId: sessaoCinema2.id,
+      ticketTypeId: ticketCinema2.id,
       clienteId: cliente2.id,
       quantidade: 3,
       status: BookingStatus.CONFIRMADO,
-      codigoCompra: codigoShow,
-      qrAssinatura: assinar(codigoShow),
+      codigoCompra: codigoCinema2,
+      qrAssinatura: assinar(codigoCinema2),
     },
   });
 
   console.log('Seed concluído.');
-  console.log(`Código de compra (teatro, confirmado): ${codigoTeatro}`);
-  console.log(`Código de compra (show, confirmado): ${codigoShow}`);
+  console.log(
+    `Código de compra (Homem-Aranha: Um Novo Dia, confirmado): ${codigoCinema1}`,
+  );
+  console.log(`Código de compra (Toy Story 5, confirmado): ${codigoCinema2}`);
 }
 
 main()
