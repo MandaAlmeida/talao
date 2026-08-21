@@ -200,9 +200,11 @@ export default function EventForm({
       usaMapaAssentos,
       status,
       sessoes: sessoes.map((s) => ({
+        id: s.id,
         dataHora: s.dataHora,
         sala: s.sala ?? undefined,
         ingressos: s.ingressos.map((t) => ({
+          id: t.id,
           nome: t.nome,
           gratuito: t.gratuito,
           preco: parseFloat(t.preco) || 0,

@@ -255,42 +255,216 @@ export class EventsService {
       throw new ForbiddenException('Você não é o organizador deste evento.');
     }
 
-    if (dto.sessoes) {
-      for (const sessao of dto.sessoes) {
-        validarFileirasSemSobreposicao(sessao.ingressos);
-      }
-    }
-
-    const {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      sessoes: _sessoes,
-      endereco,
-      ...resto
-    } = dto;
+    const { sessoes: sessoesPayload, endereco, ...resto } = dto;
     const data: Record<string, unknown> = { ...resto };
     if (endereco) data.endereco = endereco;
 
-    const atualizado = await this.prisma.event.update({
-      where: { id },
-      data,
-      include: { sessoes: { include: { ticketTypes: true } } },
-    });
+    const usaMapaAssentosFinal = dto.usaMapaAssentos ?? evento.usaMapaAssentos;
 
     const ligandoMapaAssentos =
       dto.usaMapaAssentos === true && !evento.usaMapaAssentos;
-    if (ligandoMapaAssentos) {
-      for (const sessao of evento.sessoes) {
-        if (sessao.seats.length > 0) continue;
-        await this.prisma.seat.createMany({
-          data: codigosDeAssento().map((codigo) => ({
-            sessaoId: sessao.id,
-            codigo,
-          })),
-        });
+
+    const atualizado = await this.prisma.$transaction(async (tx) => {
+      if (sessoesPayload) {
+        await this.sincronizarSessoes(
+          tx,
+          evento,
+          sessoesPayload,
+          usaMapaAssentosFinal,
+        );
+      }
+
+      if (ligandoMapaAssentos) {
+        for (const sessao of evento.sessoes) {
+          if (sessao.seats.length > 0) continue;
+          await tx.seat.createMany({
+            data: codigosDeAssento().map((codigo) => ({
+              sessaoId: sessao.id,
+              codigo,
+            })),
+          });
+        }
+      }
+
+      return tx.event.update({
+        where: { id },
+        data,
+        include: { sessoes: { include: { ticketTypes: true } } },
+      });
+    });
+
+    return atualizado;
+  }
+
+  private async sincronizarSessoes(
+    tx: Prisma.TransactionClient,
+    evento: {
+      id: string;
+      sessoes: {
+        id: string;
+        seats: { id: string }[];
+        ticketTypes: {
+          id: string;
+          nome: string;
+          fileiraInicio: string | null;
+          fileiraFim: string | null;
+        }[];
+      }[];
+    },
+    sessoesPayload: NonNullable<AtualizarEventoDto['sessoes']>,
+    usaMapaAssentos: boolean,
+  ) {
+    const sessaoIdsNoPayload = new Set(
+      sessoesPayload.map((s) => s.id).filter((v): v is string => !!v),
+    );
+
+    // Sessões existentes ausentes do payload: remove se sem vendas.
+    for (const sessaoExistente of evento.sessoes) {
+      if (sessaoIdsNoPayload.has(sessaoExistente.id)) continue;
+      const totalReservas = await tx.booking.count({
+        where: { sessaoId: sessaoExistente.id },
+      });
+      if (totalReservas === 0) {
+        await tx.sessao.delete({ where: { id: sessaoExistente.id } });
       }
     }
 
-    return atualizado;
+    for (const sessaoDto of sessoesPayload) {
+      const sessaoExistente = evento.sessoes.find((s) => s.id === sessaoDto.id);
+
+      const ticketTypeIdsNoPayload = new Set(
+        sessaoDto.ingressos.map((t) => t.id).filter((v): v is string => !!v),
+      );
+
+      const ticketTypesMantidos: {
+        nome: string;
+        fileiraInicio: string | null;
+        fileiraFim: string | null;
+      }[] = [];
+      if (sessaoExistente) {
+        for (const ticketExistente of sessaoExistente.ticketTypes) {
+          if (ticketTypeIdsNoPayload.has(ticketExistente.id)) continue;
+          const totalReservas = await tx.booking.count({
+            where: { ticketTypeId: ticketExistente.id },
+          });
+          if (totalReservas === 0) {
+            await tx.ticketType.delete({ where: { id: ticketExistente.id } });
+          } else {
+            ticketTypesMantidos.push(ticketExistente);
+          }
+        }
+      }
+
+      for (const ticketDto of sessaoDto.ingressos) {
+        if (!ticketDto.id) continue;
+        const existeNoBanco = sessaoExistente?.ticketTypes.some(
+          (t) => t.id === ticketDto.id,
+        );
+        if (!existeNoBanco) continue;
+
+        const agregado = await tx.booking.aggregate({
+          where: {
+            ticketTypeId: ticketDto.id,
+            status: {
+              in: [
+                BookingStatus.CONFIRMADO,
+                BookingStatus.USADO,
+                BookingStatus.PENDENTE,
+              ],
+            },
+          },
+          _sum: { quantidade: true },
+        });
+        const vendidos = agregado._sum.quantidade ?? 0;
+        if (ticketDto.capacidade < vendidos) {
+          throw new ConflictException(
+            `Não é possível reduzir a capacidade de "${ticketDto.nome}" abaixo de ${vendidos} ingresso(s) já vendido(s).`,
+          );
+        }
+      }
+
+      validarFileirasSemSobreposicao([
+        ...sessaoDto.ingressos,
+        ...ticketTypesMantidos,
+      ]);
+
+      if (sessaoExistente) {
+        await tx.sessao.update({
+          where: { id: sessaoExistente.id },
+          data: {
+            dataHora: new Date(sessaoDto.dataHora),
+            sala: sessaoDto.sala,
+          },
+        });
+
+        for (const ticketDto of sessaoDto.ingressos) {
+          const dadosTicket = {
+            nome: ticketDto.nome,
+            gratuito: ticketDto.gratuito,
+            preco: ticketDto.preco,
+            capacidade: ticketDto.capacidade,
+            vendaInicio: ticketDto.vendaInicio
+              ? new Date(ticketDto.vendaInicio)
+              : undefined,
+            vendaFim: ticketDto.vendaFim
+              ? new Date(ticketDto.vendaFim)
+              : undefined,
+            publico: ticketDto.publico,
+            descricao: ticketDto.descricao,
+            fileiraInicio: ticketDto.fileiraInicio,
+            fileiraFim: ticketDto.fileiraFim,
+          };
+
+          const ticketExisteNoBanco =
+            ticketDto.id &&
+            sessaoExistente.ticketTypes.some((t) => t.id === ticketDto.id);
+
+          if (ticketExisteNoBanco) {
+            await tx.ticketType.update({
+              where: { id: ticketDto.id },
+              data: dadosTicket,
+            });
+          } else {
+            await tx.ticketType.create({
+              data: { ...dadosTicket, sessaoId: sessaoExistente.id },
+            });
+          }
+        }
+      } else {
+        const novaSessao = await tx.sessao.create({
+          data: {
+            eventoId: evento.id,
+            dataHora: new Date(sessaoDto.dataHora),
+            sala: sessaoDto.sala,
+            ticketTypes: {
+              create: sessaoDto.ingressos.map((t) => ({
+                nome: t.nome,
+                gratuito: t.gratuito,
+                preco: t.preco,
+                capacidade: t.capacidade,
+                vendaInicio: t.vendaInicio
+                  ? new Date(t.vendaInicio)
+                  : undefined,
+                vendaFim: t.vendaFim ? new Date(t.vendaFim) : undefined,
+                publico: t.publico,
+                descricao: t.descricao,
+                fileiraInicio: t.fileiraInicio,
+                fileiraFim: t.fileiraFim,
+              })),
+            },
+          },
+        });
+
+        if (usaMapaAssentos) {
+          await tx.seat.createMany({
+            data: codigosDeAssento().map((codigo) => ({
+              sessaoId: novaSessao.id,
+              codigo,
+            })),
+          });
+        }
+      }
+    }
   }
 
   async cancelar(id: string, organizadorId: string) {

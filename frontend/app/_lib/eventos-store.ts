@@ -74,9 +74,11 @@ export type DadosEvento = {
   usaMapaAssentos?: boolean;
   status?: StatusEvento;
   sessoes: {
+    id?: string;
     dataHora: string;
     sala?: string;
     ingressos: {
+      id?: string;
       nome: string;
       gratuito: boolean;
       preco: number;

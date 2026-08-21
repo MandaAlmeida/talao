@@ -33,6 +33,10 @@ class EnderecoDto {
 }
 
 class TicketTypeDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @IsString()
   nome!: string;
 
@@ -72,6 +76,10 @@ class TicketTypeDto {
 }
 
 class SessaoDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @IsDateString()
   dataHora!: string;
 
