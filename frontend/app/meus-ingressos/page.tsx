@@ -116,8 +116,17 @@ function ConteudoMeusIngressos() {
                 className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 sm:flex-row sm:items-center dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <div
-                  className={`h-28 w-full shrink-0 rounded-lg bg-linear-to-br sm:h-20 sm:w-32 ${booking.evento.gradiente}`}
-                />
+                  className={`relative h-28 w-full shrink-0 overflow-hidden rounded-lg bg-linear-to-br sm:h-20 sm:w-32 ${booking.evento.gradiente}`}
+                >
+                  {booking.evento.posterUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={booking.evento.posterUrl}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
+                </div>
 
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">

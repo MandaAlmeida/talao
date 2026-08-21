@@ -67,12 +67,23 @@ function ConteudoDetalheIngresso() {
 
         <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div
-            className={`flex h-32 flex-col justify-end bg-linear-to-br p-5 text-white ${booking.evento.gradiente}`}
+            className={`relative flex h-32 flex-col justify-end overflow-hidden bg-linear-to-br p-5 text-white ${booking.evento.gradiente}`}
           >
-            <h1 className="text-xl font-extrabold leading-tight">
+            {booking.evento.posterUrl && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={booking.evento.posterUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/10 to-black/5" />
+              </>
+            )}
+            <h1 className="relative text-xl font-extrabold leading-tight">
               {booking.evento.titulo}
             </h1>
-            <p className="mt-0.5 text-xs text-white/90">
+            <p className="relative mt-0.5 text-xs text-white/90">
               {formatarDataEvento(booking.evento.dataInicio)} a{" "}
               {formatarDataEvento(booking.evento.dataFim)} ·{" "}
               {booking.evento.cidade}
