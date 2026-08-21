@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatarDataEvento, type Evento } from "../_lib/eventos";
+import { formatarPeriodoEvento, type Evento } from "../_lib/eventos";
 
 export default function EmBreveSection({ eventos }: { eventos: Evento[] }) {
   if (eventos.length === 0) return null;
@@ -57,7 +57,7 @@ export default function EmBreveSection({ eventos }: { eventos: Evento[] }) {
               </h3>
               <p className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
                 <CalendarIcon />
-                {formatarDataEvento(evento.dataInicio)} a {formatarDataEvento(evento.dataFim)}
+                {formatarPeriodoEvento(evento.dataInicio, evento.dataFim)}
               </p>
             </div>
           </Link>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatarDataEvento, type Evento } from "../_lib/eventos";
+import { formatarPeriodoEvento, type Evento } from "../_lib/eventos";
 
 const INTERVALO_AUTOPLAY_MS = 5000;
 
@@ -122,7 +122,7 @@ export default function EventCarousel({ eventos }: { eventos: Evento[] }) {
           </span>
           <span className="flex items-center gap-1">
             <CalendarIcon />
-            {formatarDataEvento(evento.dataInicio)} a {formatarDataEvento(evento.dataFim)}
+            {formatarPeriodoEvento(evento.dataInicio, evento.dataFim)}
           </span>
         </div>
       </div>

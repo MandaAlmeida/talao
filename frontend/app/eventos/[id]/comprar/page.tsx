@@ -28,7 +28,7 @@ import {
 } from "../../../_lib/checkout-format";
 import { ApiError } from "../../../_lib/api-client";
 import { buscarCep } from "../../../_lib/cep-client";
-import { formatarDataEvento, formatarDataHoraSessao } from "../../../_lib/eventos";
+import { formatarPeriodoEvento, formatarDataHoraSessao } from "../../../_lib/eventos";
 import type { TicketType } from "../../../_lib/eventos";
 import { useEvento } from "../../../_lib/use-eventos";
 import { getStripe } from "../../../_lib/stripe-client";
@@ -329,8 +329,7 @@ function ConteudoComprarIngresso() {
           {evento.titulo}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {formatarDataEvento(evento.dataInicio)} a{" "}
-          {formatarDataEvento(evento.dataFim)} · {evento.cidade}
+          {formatarPeriodoEvento(evento.dataInicio, evento.dataFim)} · {evento.cidade}
         </p>
 
         {etapa === "selecao" && (

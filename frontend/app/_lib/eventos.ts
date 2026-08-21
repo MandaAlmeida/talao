@@ -102,6 +102,19 @@ export function formatarDataEvento(iso: string): string {
   return formatado.replace(".", "").replace(/^(\d{2}) (\w)/, (_, dia, letra) => `${dia} de ${letra}`);
 }
 
+// Formata um período de evento, omitindo a data final quando início e fim
+// caem no mesmo dia (evento de sessão única não deve mostrar "22 de ago a 22 de ago").
+export function formatarPeriodoEvento(dataInicio: string, dataFim: string): string {
+  const inicio = new Date(dataInicio);
+  const fim = new Date(dataFim);
+  const mesmoDia =
+    inicio.getFullYear() === fim.getFullYear() &&
+    inicio.getMonth() === fim.getMonth() &&
+    inicio.getDate() === fim.getDate();
+  if (mesmoDia) return formatarDataEvento(dataInicio);
+  return `${formatarDataEvento(dataInicio)} a ${formatarDataEvento(dataFim)}`;
+}
+
 export function formatarDataHoraSessao(iso: string): string {
   const data = new Date(iso);
   const formatado = new Intl.DateTimeFormat("pt-BR", {

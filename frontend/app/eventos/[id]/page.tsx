@@ -6,7 +6,7 @@ import {
   buscarDisponibilidade,
   type Disponibilidade,
 } from "../../_lib/bookings-store";
-import { categoriaLabel, formatarDataEvento, formatarDataHoraSessao } from "../../_lib/eventos";
+import { categoriaLabel, formatarPeriodoEvento, formatarDataHoraSessao } from "../../_lib/eventos";
 import { useEvento } from "../../_lib/use-eventos";
 import { useEffect, useState } from "react";
 
@@ -99,8 +99,7 @@ export default function EventoPage() {
               Data e hora
             </h3>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              {formatarDataEvento(evento.dataInicio)} a{" "}
-              {formatarDataEvento(evento.dataFim)}
+              {formatarPeriodoEvento(evento.dataInicio, evento.dataFim)}
             </p>
           </div>
 

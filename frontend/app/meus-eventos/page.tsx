@@ -3,7 +3,7 @@
 import Link from "next/link";
 import RequireRole from "../_components/RequireRole";
 import StatusBadge from "../_components/StatusBadge";
-import { formatarDataEvento } from "../_lib/eventos";
+import { formatarPeriodoEvento } from "../_lib/eventos";
 import { useMeusEventos } from "../_lib/use-eventos";
 
 function ConteudoMeusEventos() {
@@ -71,8 +71,7 @@ function ConteudoMeusEventos() {
                   <p className="mt-1 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                     <span>{evento.cidade}</span>
                     <span>
-                      {formatarDataEvento(evento.dataInicio)} a{" "}
-                      {formatarDataEvento(evento.dataFim)}
+                      {formatarPeriodoEvento(evento.dataInicio, evento.dataFim)}
                     </span>
                   </p>
                   <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">

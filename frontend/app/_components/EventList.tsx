@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   categoriaLabel,
-  formatarDataEvento,
+  formatarPeriodoEvento,
   type Evento,
 } from "../_lib/eventos";
 import Select from "./form/Select";
@@ -124,8 +124,7 @@ export default function EventList({ eventos }: { eventos: Evento[] }) {
                 </h3>
                 <p className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
                   <CalendarIcon />
-                  {formatarDataEvento(evento.dataInicio)} a{" "}
-                  {formatarDataEvento(evento.dataFim)}
+                  {formatarPeriodoEvento(evento.dataInicio, evento.dataFim)}
                 </p>
               </div>
             </Link>
