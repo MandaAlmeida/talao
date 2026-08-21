@@ -64,7 +64,11 @@ function AuthFormInterno({ modo }: { modo: "login" | "registro" }) {
           ? await login(email.trim(), senha)
           : await registrar(nome.trim(), email.trim(), senha, papel);
       const next = destinoSeguro(searchParams.get("next"));
-      router.push(next ?? destinoPorPapel[usuario.papel]);
+      const destino =
+        usuario.papel === "cliente" && next
+          ? next
+          : destinoPorPapel[usuario.papel];
+      router.push(destino);
     } catch (err) {
       setErro(
         err instanceof ApiError
