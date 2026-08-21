@@ -78,7 +78,7 @@ O `npx prisma db seed` cria, sem precisar montar nada manualmente:
 
 E dois eventos publicados (ambos sessões de cinema):
 
-- **Homem-Aranha: Um Novo Dia** (cinema, Brasília) — usa mapa de assentos; os assentos A1 e A2 já estão ocupados por uma reserva confirmada do cliente 1, para já dar pra ver o mapa com lugares indisponíveis.
+- **Homem-Aranha: Um Novo Dia** (cinema, Brasília) — os ingressos estão esgotados, criado para visualização dessa função.
 - **Toy Story 5** (cinema, São Paulo) — estoque por quantidade (sem mapa de assentos); o cliente 2 já tem 3 ingressos confirmados.
 
 O código de compra de cada reserva do seed aparece no terminal ao final do `db seed` — dá pra colar direto na tela de portaria para testar uma validação "já utilizado" logo de cara.

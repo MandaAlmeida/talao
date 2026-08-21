@@ -125,10 +125,17 @@ export class OrdersService {
 
             const assentoPermitido = (codigo: string) => {
               const fileira = codigo[0];
+              const idx = FILEIRAS.indexOf(fileira);
+
+              if (ticketType.fileiraInicio && ticketType.fileiraFim) {
+                const iniProprio = FILEIRAS.indexOf(ticketType.fileiraInicio);
+                const fimProprio = FILEIRAS.indexOf(ticketType.fileiraFim);
+                if (idx < iniProprio || idx > fimProprio) return false;
+              }
+
               const donos = restritores.filter((t) => {
                 const ini = FILEIRAS.indexOf(t.fileiraInicio!);
                 const fim = FILEIRAS.indexOf(t.fileiraFim!);
-                const idx = FILEIRAS.indexOf(fileira);
                 return idx >= ini && idx <= fim;
               });
               return (
@@ -160,6 +167,28 @@ export class OrdersService {
             if (assentos.some((a) => a.bookingId !== null)) {
               throw new ConflictException(
                 'Um ou mais assentos selecionados já foram reservados.',
+              );
+            }
+
+            const agregado = await tx.booking.aggregate({
+              where: {
+                ticketTypeId: ticketType.id,
+                status: {
+                  in: [
+                    BookingStatus.CONFIRMADO,
+                    BookingStatus.USADO,
+                    BookingStatus.PENDENTE,
+                  ],
+                },
+              },
+              _sum: { quantidade: true },
+            });
+            const vendidos = agregado._sum.quantidade ?? 0;
+            const disponivel = ticketType.capacidade - vendidos;
+
+            if (item.quantidade > disponivel) {
+              throw new ConflictException(
+                `Apenas ${disponivel} ingresso(s) disponível(is) para "${ticketType.nome}".`,
               );
             }
           } else {

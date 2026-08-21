@@ -144,6 +144,71 @@ describe('OrdersService (unit, mocked Prisma)', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it('rejects a seat outside the fileira permitted even when no other ticketType claims it', async () => {
+    // regression: um ticketType restrito à fileira A não pode vender B1 só
+    // porque nenhum outro tipo "é dono" da fileira B — a própria restrição
+    // do tipo precisa valer independente de haver disputa por aquela fileira.
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-vip',
+      nome: 'VIP',
+      capacidade: 10,
+      preco: { toString: () => '100' },
+      gratuito: false,
+      fileiraInicio: 'A',
+      fileiraFim: 'A',
+      sessao: {
+        ...sessaoBase,
+        evento: { ...eventoBase, usaMapaAssentos: true },
+      },
+    });
+    tx.seat.findMany.mockResolvedValue([
+      { codigo: 'B1', sessaoId: 'sessao-1', bookingId: null },
+    ]);
+    tx.ticketType.findMany.mockResolvedValue([
+      { id: 'ticket-inteira', fileiraInicio: null, fileiraFim: null },
+    ]);
+
+    await expect(
+      service.criar('cliente-1', 'sessao-1', {
+        itens: [
+          { ticketTypeId: 'ticket-vip', quantidade: 1, assentos: ['B1'] },
+        ],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects a seat reservation exceeding the ticketType capacidade even when the physical seats are free', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      nome: 'Pista',
+      capacidade: 2,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: {
+        ...sessaoBase,
+        evento: { ...eventoBase, usaMapaAssentos: true },
+      },
+    });
+    tx.seat.findMany.mockResolvedValue([
+      { codigo: 'A1', sessaoId: 'sessao-1', bookingId: null },
+      { codigo: 'A2', sessaoId: 'sessao-1', bookingId: null },
+      { codigo: 'A3', sessaoId: 'sessao-1', bookingId: null },
+    ]);
+    tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 2 } });
+
+    await expect(
+      service.criar('cliente-1', 'sessao-1', {
+        itens: [
+          {
+            ticketTypeId: 'ticket-1',
+            quantidade: 3,
+            assentos: ['A1', 'A2', 'A3'],
+          },
+        ],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
   it('rejects an unknown ticketTypeId', async () => {
     tx.ticketType.findUnique.mockResolvedValue(null);
 

@@ -37,7 +37,10 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       seat: { findMany: jest.fn(), updateMany: jest.fn() },
-      booking: { aggregate: jest.fn(), create: jest.fn() },
+      booking: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { quantidade: 0 } }),
+        create: jest.fn(),
+      },
     };
     prisma = {
       $transaction: jest.fn((arg: unknown) =>
@@ -289,6 +292,37 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it('rejects a seat reservation exceeding the ticketType capacidade even when the physical seats are free', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      capacidade: 2,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: {
+        id: 'sessao-1',
+        dataHora: amanha,
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: true,
+          status: EventStatus.PUBLICADO,
+        },
+      },
+    });
+    tx.seat.findMany.mockResolvedValue([
+      { codigo: 'A1', bookingId: null },
+      { codigo: 'A2', bookingId: null },
+      { codigo: 'A3', bookingId: null },
+    ]);
+    tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 2 } });
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-1',
+        assentos: ['A1', 'A2', 'A3'],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
   it('rejects a seat outside the fileira permitted for the ticketType', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-vip',
@@ -312,6 +346,42 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     ]);
     tx.ticketType.findMany.mockResolvedValue([
       { id: 'ticket-inteira', fileiraInicio: 'B', fileiraFim: 'H' },
+    ]);
+
+    await expect(
+      service.reservar('cliente-1', 'sessao-1', {
+        ticketTypeId: 'ticket-vip',
+        assentos: ['B1'],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects a seat outside the fileira permitted even when no other ticketType claims it', async () => {
+    // regression: um ticketType restrito à fileira A não pode vender B1 só
+    // porque nenhum outro tipo "é dono" da fileira B — a própria restrição
+    // do tipo precisa valer independente de haver disputa por aquela fileira.
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-vip',
+      capacidade: 10,
+      preco: { toString: () => '100' },
+      gratuito: false,
+      fileiraInicio: 'A',
+      fileiraFim: 'A',
+      sessao: {
+        id: 'sessao-1',
+        dataHora: amanha,
+        evento: {
+          id: 'evento-1',
+          usaMapaAssentos: true,
+          status: EventStatus.PUBLICADO,
+        },
+      },
+    });
+    tx.seat.findMany.mockResolvedValue([
+      { codigo: 'B1', sessaoId: 'sessao-1', bookingId: null },
+    ]);
+    tx.ticketType.findMany.mockResolvedValue([
+      { id: 'ticket-inteira', fileiraInicio: null, fileiraFim: null },
     ]);
 
     await expect(
@@ -653,12 +723,35 @@ describe('BookingsService (unit, mocked Prisma)', () => {
       const inteira = resultado.find(
         (r) => r.ticketTypeId === 'ticket-inteira',
       )!;
-      // VIP restringe a fileira A para si, mas fileira B não tem nenhum
-      // restritor — então VIP também pode vender B1 (sem restrição = livre
-      // para todos). Inteira não tem restrição própria, mas A1 é exclusivo
-      // do VIP, então Inteira só enxerga B1.
-      expect(vip.disponivel).toBe(2);
+      // VIP é restrito à fileira A — só enxerga A1, nunca B1, mesmo sem
+      // nenhum outro tipo reivindicando a fileira B para si. Inteira não tem
+      // restrição própria, mas A1 é exclusivo do VIP, então só enxerga B1.
+      expect(vip.disponivel).toBe(1);
       expect(inteira.disponivel).toBe(1);
+    });
+
+    it('caps disponivel at the ticketType capacidade even when more physical seats are free', async () => {
+      prisma.sessao.findUnique.mockResolvedValue({
+        id: 'sessao-1',
+        seats: [
+          { codigo: 'A1', bookingId: null },
+          { codigo: 'A2', bookingId: null },
+          { codigo: 'A3', bookingId: null },
+        ],
+        ticketTypes: [
+          {
+            id: 'ticket-1',
+            fileiraInicio: null,
+            fileiraFim: null,
+            capacidade: 2,
+            bookings: [],
+          },
+        ],
+      });
+
+      const resultado = await service.disponibilidade('sessao-1');
+
+      expect(resultado[0].disponivel).toBe(2);
     });
   });
 });
