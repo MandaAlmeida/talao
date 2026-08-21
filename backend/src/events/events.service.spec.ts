@@ -314,15 +314,16 @@ describe('EventsService', () => {
             ingressos: [],
           },
         ],
-      } as never);
+      });
 
-      expect(prisma.event.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            dataInicio: new Date('2026-03-22T22:00:00.000Z'),
-            dataFim: new Date('2026-03-22T22:00:00.000Z'),
-          }),
-        }),
+      const chamada = prisma.event.update.mock.calls[0] as [
+        { data: { dataInicio?: Date; dataFim?: Date } },
+      ];
+      expect(chamada[0].data.dataInicio).toEqual(
+        new Date('2026-03-22T22:00:00.000Z'),
+      );
+      expect(chamada[0].data.dataFim).toEqual(
+        new Date('2026-03-22T22:00:00.000Z'),
       );
     });
 
@@ -337,9 +338,11 @@ describe('EventsService', () => {
 
       await service.atualizar('evento-1', 'dono-1', { titulo: 'Novo título' });
 
-      const dataArg = prisma.event.update.mock.calls[0][0].data;
-      expect(dataArg).not.toHaveProperty('dataInicio');
-      expect(dataArg).not.toHaveProperty('dataFim');
+      const chamada = prisma.event.update.mock.calls[0] as [
+        { data: { dataInicio?: Date; dataFim?: Date } },
+      ];
+      expect(chamada[0].data).not.toHaveProperty('dataInicio');
+      expect(chamada[0].data).not.toHaveProperty('dataFim');
     });
 
     it('updates an existing ticketType price/capacidade when it already has sales', async () => {
