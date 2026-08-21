@@ -25,8 +25,10 @@ function RequireRoleInterno({
     if (!hidratado || autorizado) return;
     const query = searchParams.toString();
     const urlAtual = query ? `${pathname}?${query}` : pathname;
-    router.replace(`/login?next=${encodeURIComponent(urlAtual)}`);
-  }, [hidratado, autorizado, router, pathname, searchParams]);
+    router.replace(
+      `/login?next=${encodeURIComponent(urlAtual)}&papelEsperado=${papel}`,
+    );
+  }, [hidratado, autorizado, router, pathname, searchParams, papel]);
 
   if (!hidratado || !autorizado) return null;
 

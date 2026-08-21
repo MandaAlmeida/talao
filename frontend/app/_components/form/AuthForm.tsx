@@ -64,8 +64,9 @@ function AuthFormInterno({ modo }: { modo: "login" | "registro" }) {
           ? await login(email.trim(), senha)
           : await registrar(nome.trim(), email.trim(), senha, papel);
       const next = destinoSeguro(searchParams.get("next"));
+      const papelEsperado = searchParams.get("papelEsperado");
       const destino =
-        usuario.papel === "cliente" && next
+        next && usuario.papel === papelEsperado
           ? next
           : destinoPorPapel[usuario.papel];
       router.push(destino);
