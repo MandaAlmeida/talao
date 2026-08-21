@@ -290,6 +290,58 @@ describe('EventsService', () => {
       expect(prisma.sessao.create).toHaveBeenCalledTimes(1);
     });
 
+    it('recalculates dataInicio/dataFim from the payload sessões when editing dates', async () => {
+      const sessaoExistente = {
+        id: 'sessao-1',
+        dataHora: new Date('2026-01-10T20:00:00Z'),
+        sala: null,
+        seats: [],
+        ticketTypes: [],
+      };
+      prisma.event.findUnique.mockResolvedValue({
+        id: 'evento-1',
+        organizadorId: 'dono-1',
+        usaMapaAssentos: false,
+        sessoes: [sessaoExistente],
+      });
+      prisma.event.update.mockResolvedValue({ id: 'evento-1' });
+
+      await service.atualizar('evento-1', 'dono-1', {
+        sessoes: [
+          {
+            id: 'sessao-1',
+            dataHora: '2026-03-22T22:00:00.000Z',
+            ingressos: [],
+          },
+        ],
+      } as never);
+
+      expect(prisma.event.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            dataInicio: new Date('2026-03-22T22:00:00.000Z'),
+            dataFim: new Date('2026-03-22T22:00:00.000Z'),
+          }),
+        }),
+      );
+    });
+
+    it('does not touch dataInicio/dataFim when dto.sessoes is not sent', async () => {
+      prisma.event.findUnique.mockResolvedValue({
+        id: 'evento-1',
+        organizadorId: 'dono-1',
+        usaMapaAssentos: false,
+        sessoes: [],
+      });
+      prisma.event.update.mockResolvedValue({ id: 'evento-1' });
+
+      await service.atualizar('evento-1', 'dono-1', { titulo: 'Novo título' });
+
+      const dataArg = prisma.event.update.mock.calls[0][0].data;
+      expect(dataArg).not.toHaveProperty('dataInicio');
+      expect(dataArg).not.toHaveProperty('dataFim');
+    });
+
     it('updates an existing ticketType price/capacidade when it already has sales', async () => {
       const sessaoExistente = {
         id: 'sessao-1',

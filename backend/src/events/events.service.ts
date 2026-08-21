@@ -258,6 +258,11 @@ export class EventsService {
     const { sessoes: sessoesPayload, endereco, ...resto } = dto;
     const data: Record<string, unknown> = { ...resto };
     if (endereco) data.endereco = endereco;
+    if (sessoesPayload) {
+      const { dataInicio, dataFim } = calcularJanela(sessoesPayload);
+      data.dataInicio = dataInicio;
+      data.dataFim = dataFim;
+    }
 
     const usaMapaAssentosFinal = dto.usaMapaAssentos ?? evento.usaMapaAssentos;
 
