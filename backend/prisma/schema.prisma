@@ -33,6 +33,13 @@ enum BookingStatus {
   USADO
 }
 
+enum OrderStatus {
+  PENDENTE
+  CONFIRMADO
+  CANCELADO
+  EXPIRADO
+}
+
 model User {
   id        String   @id @default(uuid())
   nome      String
@@ -43,6 +50,7 @@ model User {
 
   eventos   Event[]
   bookings  Booking[]
+  orders    Order[]
 }
 
 model Event {
@@ -68,6 +76,7 @@ model Event {
 
   sessoes           Sessao[]
   bookings          Booking[]
+  orders            Order[]
 }
 
 // Uma exibição/apresentação concreta do evento (ex: sessão de terça às 19h,
@@ -83,6 +92,7 @@ model Sessao {
 
   ticketTypes TicketType[]
   bookings    Booking[]
+  orders      Order[]
 }
 
 model TicketType {
@@ -113,6 +123,22 @@ model Seat {
   @@unique([ticketTypeId, codigo])
 }
 
+model Order {
+  id                    String      @id @default(uuid())
+  clienteId             String
+  cliente               User        @relation(fields: [clienteId], references: [id])
+  eventoId              String
+  evento                Event       @relation(fields: [eventoId], references: [id])
+  sessaoId              String
+  sessao                Sessao      @relation(fields: [sessaoId], references: [id])
+  status                OrderStatus @default(PENDENTE)
+  valorTotalCentavos    Int
+  stripePaymentIntentId String?     @unique
+  createdAt             DateTime    @default(now())
+
+  bookings              Booking[]
+}
+
 model Booking {
   id           String        @id @default(uuid())
   eventoId     String
@@ -124,11 +150,14 @@ model Booking {
   clienteId    String
   cliente      User          @relation(fields: [clienteId], references: [id])
   quantidade   Int
+  valorCentavos Int          @default(0)
   status       BookingStatus @default(PENDENTE)
   codigoCompra String        @unique
   qrAssinatura String
   shareToken   String        @unique @default(uuid())
   stripePaymentIntentId String? @unique
+  orderId      String?
+  order        Order?        @relation(fields: [orderId], references: [id])
   expiraEm     DateTime?
   createdAt    DateTime      @default(now())
   usadoEm      DateTime?
