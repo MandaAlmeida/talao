@@ -6,10 +6,12 @@ const ASSENTOS_POR_FILEIRA = 10;
 export default function SeatMap({
   selecionados,
   ocupados,
+  limite,
   onToggle,
 }: {
   selecionados: string[];
   ocupados: string[];
+  limite: number;
   onToggle: (assento: string) => void;
 }) {
   return (
@@ -32,7 +34,10 @@ export default function SeatMap({
                   key={codigo}
                   type="button"
                   disabled={ocupado}
-                  onClick={() => onToggle(codigo)}
+                  onClick={() => {
+                    if (!selecionado && selecionados.length >= limite) return;
+                    onToggle(codigo);
+                  }}
                   aria-label={`Assento ${codigo}${ocupado ? " (ocupado)" : ""}`}
                   className={`h-6 w-6 rounded text-[10px] font-medium transition-colors ${
                     ocupado

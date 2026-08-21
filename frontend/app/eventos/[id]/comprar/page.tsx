@@ -12,9 +12,9 @@ import {
 import SeatMap from "../../../_components/SeatMap";
 import RequireRole from "../../../_components/RequireRole";
 import {
-  buscarBooking,
   buscarDisponibilidade,
-  criarReserva,
+  buscarOrder,
+  criarOrder,
   type Disponibilidade,
 } from "../../../_lib/bookings-store";
 import {
@@ -34,6 +34,12 @@ import { useEvento } from "../../../_lib/use-eventos";
 import { getStripe } from "../../../_lib/stripe-client";
 
 type Etapa = "selecao" | "pagamento" | "confirmando" | "sucesso" | "falha";
+
+type ItemCarrinho = {
+  ticketType: TicketType;
+  quantidade: number;
+  assentos: string[];
+};
 
 type ErrosComprador = {
   cpf?: string;
@@ -55,11 +61,8 @@ function ConteudoComprarIngresso() {
 
   const [sessaoId, setSessaoId] = useState<string | null>(sessaoIdParam);
   const [etapa, setEtapa] = useState<Etapa>("selecao");
-  const [ticketSelecionado, setTicketSelecionado] = useState<TicketType | null>(
-    null,
-  );
-  const [quantidade, setQuantidade] = useState(1);
-  const [assentos, setAssentos] = useState<string[]>([]);
+  const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
+  const [ticketEmEdicaoId, setTicketEmEdicaoId] = useState<string | null>(null);
   const [disponibilidade, setDisponibilidade] = useState<Disponibilidade[]>([]);
 
   const sessaoSelecionada = evento?.sessoes.find((s) => s.id === sessaoId) ?? evento?.sessoes[0];
@@ -78,12 +81,14 @@ function ConteudoComprarIngresso() {
   const [erros, setErros] = useState<ErrosComprador>({});
   const [erroReserva, setErroReserva] = useState("");
   const [criandoReserva, setCriandoReserva] = useState(false);
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [bookingIds, setBookingIds] = useState<string[]>([]);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [tentativasEsgotadas, setTentativasEsgotadas] = useState(false);
 
   const usaAssentos = evento?.usaMapaAssentos ?? false;
-  const quantidadeFinal = usaAssentos ? assentos.length : quantidade;
+
+  const itemEmEdicao = carrinho.find((i) => i.ticketType.id === ticketEmEdicaoId);
 
   useEffect(() => {
     if (!sessaoSelecionada) return;
@@ -95,16 +100,18 @@ function ConteudoComprarIngresso() {
   }, [sessaoSelecionada]);
 
   const disponibilidadeTicket = disponibilidade.find(
-    (d) => d.ticketTypeId === ticketSelecionado?.id,
+    (d) => d.ticketTypeId === ticketEmEdicaoId,
   );
   const disponivel = disponibilidadeTicket?.disponivel ?? 0;
   const assentosOcupados = disponibilidadeTicket?.assentosOcupados ?? [];
 
-  const subtotal = useMemo(() => {
-    if (!ticketSelecionado || ticketSelecionado.gratuito) return 0;
-    const preco = parseFloat(ticketSelecionado.preco) || 0;
-    return preco * quantidadeFinal;
-  }, [ticketSelecionado, quantidadeFinal]);
+  const precoItem = (item: ItemCarrinho) =>
+    item.ticketType.gratuito ? 0 : (parseFloat(item.ticketType.preco) || 0) * item.quantidade;
+
+  const totalCarrinho = useMemo(
+    () => carrinho.reduce((soma, item) => soma + precoItem(item), 0),
+    [carrinho],
+  );
 
   const existeIngressoEsgotado = (sessaoSelecionada?.ingressos ?? []).some((ticket) => {
     const d = disponibilidade.find((item) => item.ticketTypeId === ticket.id);
@@ -118,20 +125,17 @@ function ConteudoComprarIngresso() {
   }, [existeIngressoEsgotado]);
 
   useEffect(() => {
-    if (etapa !== "confirmando" || !bookingId) return;
+    if (etapa !== "confirmando" || !orderId) return;
 
     let tentativas = 0;
     const intervalo = setInterval(() => {
       tentativas += 1;
-      buscarBooking(bookingId)
-        .then((booking) => {
-          if (booking.status === "CONFIRMADO") {
+      buscarOrder(orderId)
+        .then((order) => {
+          if (order.status === "CONFIRMADO") {
             setEtapa("sucesso");
             clearInterval(intervalo);
-          } else if (
-            booking.status === "CANCELADO" ||
-            booking.status === "EXPIRADO"
-          ) {
+          } else if (order.status === "CANCELADO" || order.status === "EXPIRADO") {
             setEtapa("falha");
             clearInterval(intervalo);
           } else if (tentativas >= 20) {
@@ -145,7 +149,7 @@ function ConteudoComprarIngresso() {
     }, 1500);
 
     return () => clearInterval(intervalo);
-  }, [etapa, bookingId]);
+  }, [etapa, orderId]);
 
   if (erro) notFound();
   if (carregando || !evento) {
@@ -159,24 +163,60 @@ function ConteudoComprarIngresso() {
   }
 
   const ingressos = sessaoSelecionada?.ingressos ?? [];
+
+  const itemValido = (item: ItemCarrinho) =>
+    item.quantidade > 0 && (!usaAssentos || item.assentos.length === item.quantidade);
+
   const podeAvancar =
     sessaoSelecionada !== undefined &&
-    ticketSelecionado !== null &&
-    quantidadeFinal > 0 &&
-    quantidadeFinal <= disponivel;
+    carrinho.length > 0 &&
+    carrinho.every(itemValido);
+
+  const itemEmEdicaoValido = itemEmEdicao
+    ? itemEmEdicao.quantidade > 0 &&
+      itemEmEdicao.quantidade <= disponivel &&
+      (!usaAssentos || itemEmEdicao.assentos.length === itemEmEdicao.quantidade)
+    : false;
 
   const toggleAssento = (codigo: string) => {
-    setAssentos((prev) =>
-      prev.includes(codigo)
-        ? prev.filter((a) => a !== codigo)
-        : [...prev, codigo],
+    if (!ticketEmEdicaoId) return;
+    setCarrinho((prev) =>
+      prev.map((item) =>
+        item.ticketType.id !== ticketEmEdicaoId
+          ? item
+          : {
+              ...item,
+              assentos: item.assentos.includes(codigo)
+                ? item.assentos.filter((a) => a !== codigo)
+                : [...item.assentos, codigo],
+            },
+      ),
     );
   };
 
-  const selecionarTicket = (ticket: TicketType) => {
-    setTicketSelecionado(ticket);
-    setQuantidade(1);
-    setAssentos([]);
+  const definirQuantidade = (quantidade: number) => {
+    if (!ticketEmEdicaoId) return;
+    setCarrinho((prev) =>
+      prev.map((item) =>
+        item.ticketType.id !== ticketEmEdicaoId
+          ? item
+          : { ...item, quantidade, assentos: item.assentos.slice(0, quantidade) },
+      ),
+    );
+  };
+
+  const abrirItem = (ticket: TicketType) => {
+    setTicketEmEdicaoId(ticket.id);
+    setCarrinho((prev) =>
+      prev.some((i) => i.ticketType.id === ticket.id)
+        ? prev
+        : [...prev, { ticketType: ticket, quantidade: 1, assentos: [] }],
+    );
+  };
+
+  const removerItem = (ticketTypeId: string) => {
+    setCarrinho((prev) => prev.filter((i) => i.ticketType.id !== ticketTypeId));
+    if (ticketEmEdicaoId === ticketTypeId) setTicketEmEdicaoId(null);
   };
 
   const validarDadosComprador = (): ErrosComprador => {
@@ -222,24 +262,27 @@ function ConteudoComprarIngresso() {
     setCriandoReserva(true);
     setErroReserva("");
     try {
-      const reserva = await criarReserva(sessaoSelecionada.id, {
-        ticketTypeId: ticketSelecionado!.id,
-        quantidade: usaAssentos ? undefined : quantidade,
-        assentos: usaAssentos ? assentos : undefined,
+      const order = await criarOrder(sessaoSelecionada.id, {
+        itens: carrinho.map((item) => ({
+          ticketTypeId: item.ticketType.id,
+          quantidade: item.quantidade,
+          assentos: usaAssentos ? item.assentos : undefined,
+        })),
       });
-      setBookingId(reserva.bookingId);
-      if (reserva.clientSecret === null) {
-        // Ingresso gratuito: o backend já confirma a reserva na hora, sem Stripe.
+      setOrderId(order.orderId);
+      setBookingIds(order.bookingIds);
+      if (order.clientSecret === null) {
+        // Pedido 100% gratuito: o backend já confirma na hora, sem Stripe.
         setEtapa("sucesso");
       } else {
-        setClientSecret(reserva.clientSecret);
+        setClientSecret(order.clientSecret);
         setEtapa("pagamento");
       }
     } catch (err) {
       setErroReserva(
         err instanceof ApiError
           ? err.message
-          : "Não foi possível reservar o ingresso. Tente novamente.",
+          : "Não foi possível reservar os ingressos. Tente novamente.",
       );
       buscarDisponibilidade(sessaoSelecionada.id)
         .then(setDisponibilidade)
@@ -280,8 +323,8 @@ function ConteudoComprarIngresso() {
                       type="button"
                       onClick={() => {
                         setSessaoId(sessao.id);
-                        setTicketSelecionado(null);
-                        setAssentos([]);
+                        setCarrinho([]);
+                        setTicketEmEdicaoId(null);
                       }}
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                         sessao.id === sessaoSelecionada?.id
@@ -314,11 +357,11 @@ function ConteudoComprarIngresso() {
                       key={ticket.id}
                       type="button"
                       disabled={esgotado}
-                      onClick={() => selecionarTicket(ticket)}
+                      onClick={() => abrirItem(ticket)}
                       className={`flex items-center justify-between rounded-lg border p-4 text-left transition-colors ${
                         esgotado
                           ? "cursor-not-allowed border-zinc-200 opacity-50 dark:border-zinc-800"
-                          : ticketSelecionado?.id === ticket.id
+                          : carrinho.some((i) => i.ticketType.id === ticket.id)
                             ? "border-zinc-900 bg-zinc-50 dark:border-zinc-50 dark:bg-zinc-800"
                             : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
                       }`}
@@ -345,55 +388,126 @@ function ConteudoComprarIngresso() {
               </div>
             </section>
 
-            {ticketSelecionado && (
+            {itemEmEdicao && (
               <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                  {usaAssentos ? "Selecione os assentos" : "Quantidade"}
+                  {itemEmEdicao.ticketType.nome}
                 </h2>
 
-                {usaAssentos ? (
-                  <div className="mt-4 overflow-x-auto">
-                    <SeatMap
-                      selecionados={assentos}
-                      ocupados={assentosOcupados}
-                      onToggle={toggleAssento}
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-4 flex items-center gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setQuantidade((q) => Math.max(1, q - 1))}
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-lg font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
-                    >
-                      −
-                    </button>
-                    <span className="w-6 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                      {quantidade}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQuantidade((q) => Math.min(disponivel, q + 1))
-                      }
-                      disabled={quantidade >= disponivel}
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-lg font-medium text-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
-                    >
-                      +
-                    </button>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                      {disponivel} disponíveis
-                    </span>
+                <div className="mt-4 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => definirQuantidade(Math.max(1, itemEmEdicao.quantidade - 1))}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-lg font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                    {itemEmEdicao.quantidade}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      definirQuantidade(Math.min(disponivel, itemEmEdicao.quantidade + 1))
+                    }
+                    disabled={itemEmEdicao.quantidade >= disponivel}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-lg font-medium text-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    +
+                  </button>
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                    {disponivel} disponíveis
+                  </span>
+                </div>
+
+                {usaAssentos && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+                      {itemEmEdicao.assentos.length}/{itemEmEdicao.quantidade} assentos selecionados
+                    </p>
+                    <div className="overflow-x-auto">
+                      <SeatMap
+                        selecionados={itemEmEdicao.assentos}
+                        ocupados={assentosOcupados}
+                        limite={itemEmEdicao.quantidade}
+                        onToggle={toggleAssento}
+                      />
+                    </div>
                   </div>
                 )}
 
                 <div className="mt-6 flex items-center justify-between border-t border-zinc-200 pt-4 dark:border-zinc-800">
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Subtotal ({quantidadeFinal}{" "}
-                    {quantidadeFinal === 1 ? "ingresso" : "ingressos"})
+                    Subtotal ({itemEmEdicao.quantidade}{" "}
+                    {itemEmEdicao.quantidade === 1 ? "ingresso" : "ingressos"})
                   </span>
                   <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                    {subtotal === 0 ? "Gratuito" : `R$ ${subtotal.toFixed(2)}`}
+                    {precoItem(itemEmEdicao) === 0
+                      ? "Gratuito"
+                      : `R$ ${precoItem(itemEmEdicao).toFixed(2)}`}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setTicketEmEdicaoId(null)}
+                  disabled={!itemEmEdicaoValido}
+                  className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                >
+                  Adicionar ao carrinho
+                </button>
+              </section>
+            )}
+
+            {carrinho.length > 0 && (
+              <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                  Seu carrinho
+                </h2>
+                <div className="mt-4 flex flex-col gap-2">
+                  {carrinho.map((item) => (
+                    <div
+                      key={item.ticketType.id}
+                      className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          {item.ticketType.nome} · {item.quantidade}{" "}
+                          {item.quantidade === 1 ? "ingresso" : "ingressos"}
+                        </p>
+                        {usaAssentos && (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            Assentos: {item.assentos.join(", ") || "nenhum selecionado"}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                          {precoItem(item) === 0 ? "Gratuito" : `R$ ${precoItem(item).toFixed(2)}`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTicketEmEdicaoId(item.ticketType.id)}
+                          className="text-xs font-medium text-zinc-600 underline dark:text-zinc-400"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removerItem(item.ticketType.id)}
+                          className="text-xs font-medium text-red-600 underline dark:text-red-400"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">Total</span>
+                  <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                    {totalCarrinho === 0 ? "Gratuito" : `R$ ${totalCarrinho.toFixed(2)}`}
                   </span>
                 </div>
 
@@ -520,16 +634,18 @@ function ConteudoComprarIngresso() {
           </div>
         )}
 
-        {etapa === "pagamento" && ticketSelecionado && clientSecret && (
+        {etapa === "pagamento" && clientSecret && (
           <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-4 dark:border-zinc-800">
               <div>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {ticketSelecionado.nome} · {quantidadeFinal}{" "}
-                  {quantidadeFinal === 1 ? "ingresso" : "ingressos"}
-                </p>
+                {carrinho.map((item) => (
+                  <p key={item.ticketType.id} className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {item.ticketType.nome} · {item.quantidade}{" "}
+                    {item.quantidade === 1 ? "ingresso" : "ingressos"}
+                  </p>
+                ))}
                 <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                  {subtotal === 0 ? "Gratuito" : `R$ ${subtotal.toFixed(2)}`}
+                  {totalCarrinho === 0 ? "Gratuito" : `R$ ${totalCarrinho.toFixed(2)}`}
                 </p>
               </div>
             </div>
@@ -567,7 +683,8 @@ function ConteudoComprarIngresso() {
               type="button"
               onClick={() => {
                 setEtapa("selecao");
-                setBookingId(null);
+                setOrderId(null);
+                setBookingIds([]);
                 setClientSecret(null);
                 setTentativasEsgotadas(false);
                 if (sessaoSelecionada) {
@@ -594,13 +711,24 @@ function ConteudoComprarIngresso() {
             <p className="text-sm text-green-800 dark:text-green-400">
               Seu ingresso para {evento.titulo} foi confirmado.
             </p>
-            {bookingId && (
-              <Link
-                href={`/meus-ingressos/${bookingId}`}
-                className="mt-2 rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
-              >
-                Ver meu ingresso
-              </Link>
+            {bookingIds.length > 0 && (
+              <div className="mt-2 flex flex-col items-center gap-2">
+                {bookingIds.map((id) => (
+                  <Link
+                    key={id}
+                    href={`/meus-ingressos/${id}`}
+                    className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                  >
+                    {bookingIds.length > 1 ? `Ver ingresso ${id.slice(0, 8)}` : "Ver meu ingresso"}
+                  </Link>
+                ))}
+                <Link
+                  href="/meus-ingressos"
+                  className="text-sm font-medium text-zinc-600 underline dark:text-zinc-400"
+                >
+                  Ver todos em Meus ingressos
+                </Link>
+              </div>
             )}
           </section>
         )}

@@ -26,6 +26,7 @@ type EventoBooking = {
   dataInicio: string;
   dataFim: string;
   gradiente: string;
+  posterUrl: string | null;
   endereco: { rua: string; numero: string; bairro?: string; cidade: string; estado: string } | null;
 };
 
@@ -51,6 +52,29 @@ export type DadosReserva = {
   assentos?: string[];
 };
 
+export type ItemPedido = {
+  ticketTypeId: string;
+  quantidade: number;
+  assentos?: string[];
+};
+
+export type DadosOrder = {
+  itens: ItemPedido[];
+};
+
+export type OrderCriada = {
+  orderId: string;
+  clientSecret: string | null;
+  expiraEm: string | null;
+  bookingIds: string[];
+};
+
+export type OrderDetalhada = {
+  id: string;
+  status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "EXPIRADO";
+  bookings: BookingDetalhado[];
+};
+
 export async function buscarDisponibilidade(sessaoId: string): Promise<Disponibilidade[]> {
   return apiFetch<Disponibilidade[]>(`/sessoes/${sessaoId}/disponibilidade`, { auth: false });
 }
@@ -64,6 +88,17 @@ export async function criarReserva(sessaoId: string, dados: DadosReserva): Promi
 
 export async function buscarBooking(id: string): Promise<Booking> {
   return apiFetch<Booking>(`/bookings/${id}`);
+}
+
+export async function criarOrder(sessaoId: string, dados: DadosOrder): Promise<OrderCriada> {
+  return apiFetch<OrderCriada>(`/sessoes/${sessaoId}/orders`, {
+    method: "POST",
+    body: JSON.stringify(dados),
+  });
+}
+
+export async function buscarOrder(id: string): Promise<OrderDetalhada> {
+  return apiFetch<OrderDetalhada>(`/orders/${id}`);
 }
 
 export async function buscarMinhasBookings(): Promise<BookingDetalhado[]> {
