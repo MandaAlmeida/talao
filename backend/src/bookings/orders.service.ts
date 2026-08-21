@@ -52,15 +52,6 @@ export class OrdersService {
 
     const { order, bookingIds, valorTotalCentavos } =
       await this.prisma.$transaction(async (tx) => {
-        const order = await tx.order.create({
-          data: {
-            clienteId,
-            eventoId: '',
-            sessaoId,
-            valorTotalCentavos: 0,
-          },
-        });
-
         let eventoId = '';
         let valorTotalCentavos = 0;
         const bookingIds: string[] = [];
@@ -86,6 +77,27 @@ export class OrdersService {
           ) {
             throw new ConflictException(
               'Este evento ainda não está com as vendas abertas.',
+            );
+          }
+
+          if (ticketType.sessao.dataHora.getTime() <= Date.now()) {
+            throw new ConflictException('Este evento já começou.');
+          }
+
+          if (
+            ticketType.vendaInicio &&
+            ticketType.vendaInicio.getTime() > Date.now()
+          ) {
+            throw new ConflictException(
+              `As vendas de "${ticketType.nome}" ainda não começaram.`,
+            );
+          }
+          if (
+            ticketType.vendaFim &&
+            ticketType.vendaFim.getTime() < Date.now()
+          ) {
+            throw new ConflictException(
+              `As vendas de "${ticketType.nome}" já foram encerradas.`,
             );
           }
 
@@ -185,7 +197,6 @@ export class OrdersService {
 
           const novaBooking = await tx.booking.create({
             data: {
-              orderId: order.id,
               eventoId: evento.id,
               sessaoId,
               ticketTypeId: ticketType.id,
@@ -212,20 +223,24 @@ export class OrdersService {
         }
 
         const gratis = valorTotalCentavos === 0;
-        await tx.order.update({
-          where: { id: order.id },
+        const order = await tx.order.create({
           data: {
+            clienteId,
             eventoId,
+            sessaoId,
             valorTotalCentavos,
             status: gratis ? OrderStatus.CONFIRMADO : OrderStatus.PENDENTE,
           },
         });
-        if (gratis) {
-          await tx.booking.updateMany({
-            where: { id: { in: bookingIds } },
-            data: { status: BookingStatus.CONFIRMADO, expiraEm: null },
-          });
-        }
+        await tx.booking.updateMany({
+          where: { id: { in: bookingIds } },
+          data: {
+            orderId: order.id,
+            ...(gratis
+              ? { status: BookingStatus.CONFIRMADO, expiraEm: null }
+              : {}),
+          },
+        });
 
         return { order, bookingIds, valorTotalCentavos };
       });

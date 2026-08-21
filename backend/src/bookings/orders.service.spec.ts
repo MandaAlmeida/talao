@@ -35,6 +35,8 @@ describe('OrdersService (unit, mocked Prisma)', () => {
     usaMapaAssentos: false,
     status: EventStatus.PUBLICADO,
   };
+  const amanha = new Date(Date.now() + 24 * 60 * 60_000);
+  const sessaoBase = { id: 'sessao-1', dataHora: amanha, evento: eventoBase };
 
   beforeEach(async () => {
     tx = {
@@ -100,7 +102,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
       preco: { toString: () => '50' },
       gratuito: false,
       sessao: {
-        id: 'sessao-1',
+        ...sessaoBase,
         evento: { ...eventoBase, usaMapaAssentos: true },
       },
     });
@@ -122,7 +124,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
       fileiraInicio: 'A',
       fileiraFim: 'A',
       sessao: {
-        id: 'sessao-1',
+        ...sessaoBase,
         evento: { ...eventoBase, usaMapaAssentos: true },
       },
     });
@@ -152,6 +154,59 @@ describe('OrdersService (unit, mocked Prisma)', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it('rejects buying for a sessão that already started', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      nome: 'Pista',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      sessao: { ...sessaoBase, dataHora: new Date(Date.now() - 1000) },
+    });
+
+    await expect(
+      service.criar('cliente-1', 'sessao-1', {
+        itens: [{ ticketTypeId: 'ticket-1', quantidade: 1 }],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects buying a ticketType whose vendaInicio has not arrived yet', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      nome: 'Pista',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      vendaInicio: new Date(Date.now() + 60_000),
+      sessao: sessaoBase,
+    });
+
+    await expect(
+      service.criar('cliente-1', 'sessao-1', {
+        itens: [{ ticketTypeId: 'ticket-1', quantidade: 1 }],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects buying a ticketType whose vendaFim already passed', async () => {
+    tx.ticketType.findUnique.mockResolvedValue({
+      id: 'ticket-1',
+      nome: 'Pista',
+      capacidade: 10,
+      preco: { toString: () => '20' },
+      gratuito: false,
+      vendaFim: new Date(Date.now() - 60_000),
+      sessao: sessaoBase,
+    });
+
+    await expect(
+      service.criar('cliente-1', 'sessao-1', {
+        itens: [{ ticketTypeId: 'ticket-1', quantidade: 1 }],
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
   it('rejects when quantity-based stock is insufficient', async () => {
     tx.ticketType.findUnique.mockResolvedValue({
       id: 'ticket-1',
@@ -159,7 +214,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
       capacidade: 10,
       preco: { toString: () => '20' },
       gratuito: false,
-      sessao: { id: 'sessao-1', evento: eventoBase },
+      sessao: sessaoBase,
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 9 } });
 
@@ -178,7 +233,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
         capacidade: 100,
         preco: { toString: () => '50' },
         gratuito: false,
-        sessao: { id: 'sessao-1', evento: eventoBase },
+        sessao: sessaoBase,
       })
       .mockResolvedValueOnce({
         id: 'ticket-2',
@@ -186,7 +241,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
         capacidade: 100,
         preco: { toString: () => '100' },
         gratuito: false,
-        sessao: { id: 'sessao-1', evento: eventoBase },
+        sessao: sessaoBase,
       });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
     let contador = 0;
@@ -216,6 +271,13 @@ describe('OrdersService (unit, mocked Prisma)', () => {
     expect(resultado.orderId).toBe('order-1');
     expect(resultado.bookingIds).toEqual(['booking-1', 'booking-2']);
     expect(resultado.clientSecret).toBe('secret_test');
+
+    // regression: Order.eventoId é obrigatório (FK) — precisa vir preenchido
+    // com o evento real já no create, nunca um placeholder vazio.
+    const chamadaOrder = tx.order.create.mock.calls[0] as [
+      { data: { eventoId: string } },
+    ];
+    expect(chamadaOrder[0].data.eventoId).toBe('evento-1');
   });
 
   it('confirms every booking immediately when all items are free', async () => {
@@ -225,7 +287,7 @@ describe('OrdersService (unit, mocked Prisma)', () => {
       capacidade: 100,
       preco: { toString: () => '0' },
       gratuito: true,
-      sessao: { id: 'sessao-1', evento: eventoBase },
+      sessao: sessaoBase,
     });
     tx.booking.aggregate.mockResolvedValue({ _sum: { quantidade: 0 } });
     tx.booking.create.mockImplementation(
