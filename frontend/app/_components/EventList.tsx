@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   categoriaLabel,
   formatarPeriodoEvento,
+  seloEvento,
   type Evento,
 } from "../_lib/eventos";
 import Select from "./form/Select";
@@ -117,6 +118,11 @@ export default function EventList({ eventos }: { eventos: Evento[] }) {
                 <span className="relative rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
                   {evento.cidade}
                 </span>
+                {seloEvento(evento) && (
+                  <span className="absolute left-3 top-3 z-10 rounded-full bg-zinc-800/80 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {seloEvento(evento)}
+                  </span>
+                )}
               </div>
               <div className="p-4">
                 <h3 className="font-bold text-zinc-900 group-hover:underline dark:text-zinc-50">

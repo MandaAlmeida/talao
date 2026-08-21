@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatarPeriodoEvento, type Evento } from "../_lib/eventos";
+import { formatarPeriodoEvento, seloEvento, type Evento } from "../_lib/eventos";
 
 const INTERVALO_AUTOPLAY_MS = 5000;
 
@@ -131,16 +131,25 @@ export default function EventCarousel({ eventos }: { eventos: Evento[] }) {
 }
 
 function EventPoster({ evento }: { evento: Evento }) {
-  if (!evento.posterUrl) return null;
+  const selo = seloEvento(evento);
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={evento.posterUrl}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-      />
-      <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-black/10" />
+      {evento.posterUrl && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={evento.posterUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-black/10" />
+        </>
+      )}
+      {selo && (
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-zinc-800/80 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+          {selo}
+        </span>
+      )}
     </>
   );
 }

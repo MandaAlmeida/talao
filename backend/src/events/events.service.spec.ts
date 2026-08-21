@@ -13,7 +13,12 @@ import type { CriarEventoDto } from './dto/criar-evento.dto';
 describe('EventsService', () => {
   let service: EventsService;
   let prisma: {
-    event: { findUnique: jest.Mock; update: jest.Mock; create: jest.Mock };
+    event: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      update: jest.Mock;
+      create: jest.Mock;
+    };
     seat: { createMany: jest.Mock };
     sessao: { create: jest.Mock; update: jest.Mock; delete: jest.Mock };
     ticketType: { create: jest.Mock; update: jest.Mock; delete: jest.Mock };
@@ -33,6 +38,7 @@ describe('EventsService', () => {
     prisma = {
       event: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
       },
@@ -520,6 +526,66 @@ describe('EventsService', () => {
         sessaoId: 'sessao-nova',
         codigo: 'A1',
       });
+    });
+  });
+
+  describe('esgotado', () => {
+    const eventoComTicketTypes = (
+      ticketTypes: { id: string; capacidade: number }[],
+    ) => ({
+      id: 'evento-1',
+      sessoes: [{ id: 'sessao-1', ticketTypes }],
+    });
+
+    it('marks buscarPorId result as esgotado when every ticket type is sold out', async () => {
+      prisma.event.findUnique.mockResolvedValue(
+        eventoComTicketTypes([{ id: 'ticket-1', capacidade: 10 }]),
+      );
+      prisma.booking.aggregate.mockResolvedValue({
+        _sum: { quantidade: 10 },
+      });
+
+      const resultado = await service.buscarPorId('evento-1');
+
+      expect(resultado.esgotado).toBe(true);
+    });
+
+    it('marks buscarPorId result as not esgotado when any ticket type still has availability', async () => {
+      prisma.event.findUnique.mockResolvedValue(
+        eventoComTicketTypes([
+          { id: 'ticket-1', capacidade: 10 },
+          { id: 'ticket-2', capacidade: 10 },
+        ]),
+      );
+      prisma.booking.aggregate
+        .mockResolvedValueOnce({ _sum: { quantidade: 10 } })
+        .mockResolvedValueOnce({ _sum: { quantidade: 3 } });
+
+      const resultado = await service.buscarPorId('evento-1');
+
+      expect(resultado.esgotado).toBe(false);
+    });
+
+    it('marks an event with no ticket types as not esgotado', async () => {
+      prisma.event.findUnique.mockResolvedValue(eventoComTicketTypes([]));
+
+      const resultado = await service.buscarPorId('evento-1');
+
+      expect(resultado.esgotado).toBe(false);
+    });
+
+    it('computes esgotado per event when listing', async () => {
+      prisma.event.findMany.mockResolvedValue([
+        eventoComTicketTypes([{ id: 'ticket-1', capacidade: 5 }]),
+        eventoComTicketTypes([{ id: 'ticket-2', capacidade: 5 }]),
+      ]);
+      prisma.booking.aggregate
+        .mockResolvedValueOnce({ _sum: { quantidade: 5 } })
+        .mockResolvedValueOnce({ _sum: { quantidade: 1 } });
+
+      const resultado = await service.listar({});
+
+      expect(resultado.map((e) => e.esgotado)).toEqual([true, false]);
     });
   });
 });

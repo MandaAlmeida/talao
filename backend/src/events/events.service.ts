@@ -138,7 +138,7 @@ export class EventsService {
   }
 
   async listar(filtros: ListarEventosDto) {
-    return this.prisma.event.findMany({
+    const eventos = await this.prisma.event.findMany({
       where: {
         status:
           filtros.status === 'em-breve'
@@ -160,6 +160,8 @@ export class EventsService {
       },
       orderBy: { dataInicio: 'asc' },
     });
+
+    return Promise.all(eventos.map((evento) => this.comEsgotado(evento)));
   }
 
   async buscarPorId(id: string) {
@@ -173,7 +175,43 @@ export class EventsService {
       },
     });
     if (!evento) throw new NotFoundException('Evento não encontrado.');
-    return evento;
+    return this.comEsgotado(evento);
+  }
+
+  // Um evento está esgotado quando todos os tipos de ingresso de todas as
+  // sessões já atingiram a capacidade (vendas confirmadas, em uso ou pendentes).
+  private async comEsgotado<
+    T extends {
+      sessoes: { ticketTypes: { id: string; capacidade: number }[] }[];
+    },
+  >(evento: T): Promise<T & { esgotado: boolean }> {
+    const ticketTypes = evento.sessoes.flatMap((s) => s.ticketTypes);
+    if (ticketTypes.length === 0) return { ...evento, esgotado: false };
+
+    const vendidosPorTicketType = await Promise.all(
+      ticketTypes.map(async (tt) => {
+        const agregado = await this.prisma.booking.aggregate({
+          where: {
+            ticketTypeId: tt.id,
+            status: {
+              in: [
+                BookingStatus.CONFIRMADO,
+                BookingStatus.USADO,
+                BookingStatus.PENDENTE,
+              ],
+            },
+          },
+          _sum: { quantidade: true },
+        });
+        return agregado._sum.quantidade ?? 0;
+      }),
+    );
+
+    const esgotado = ticketTypes.every(
+      (tt, i) => vendidosPorTicketType[i] >= tt.capacidade,
+    );
+
+    return { ...evento, esgotado };
   }
 
   async meusEventos(organizadorId: string) {
@@ -232,6 +270,9 @@ export class EventsService {
           total + (tt.gratuito ? 0 : Number(tt.preco) * tt.vendidos),
         0,
       );
+      const esgotado =
+        todosTicketTypes.length > 0 &&
+        todosTicketTypes.every((tt) => tt.vendidos >= tt.capacidade);
 
       return {
         ...evento,
@@ -239,6 +280,7 @@ export class EventsService {
         totalVendidos,
         totalCapacidade,
         receitaTotal,
+        esgotado,
       };
     });
   }

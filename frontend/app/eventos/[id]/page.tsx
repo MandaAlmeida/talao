@@ -6,7 +6,7 @@ import {
   buscarDisponibilidade,
   type Disponibilidade,
 } from "../../_lib/bookings-store";
-import { categoriaLabel, formatarPeriodoEvento, formatarDataHoraSessao } from "../../_lib/eventos";
+import { categoriaLabel, formatarPeriodoEvento, formatarDataHoraSessao, seloEvento } from "../../_lib/eventos";
 import { useEvento } from "../../_lib/use-eventos";
 import { useEffect, useState } from "react";
 
@@ -59,6 +59,11 @@ export default function EventoPage() {
               />
               <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-black/10" />
             </>
+          )}
+          {seloEvento(evento) && (
+            <span className="absolute left-4 top-4 rounded-full bg-zinc-800/80 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+              {seloEvento(evento)}
+            </span>
           )}
           <span className="relative mb-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
             {evento.modalidade === "online" ? "Online" : "Presencial"}

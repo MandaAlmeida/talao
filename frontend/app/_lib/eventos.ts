@@ -67,6 +67,7 @@ export type Evento = {
   usaMapaAssentos: boolean;
   organizadorId: string;
   sessoes: Sessao[];
+  esgotado: boolean;
 };
 
 export type TicketTypeComMetricas = TicketType & { vendidos: number };
@@ -113,6 +114,18 @@ export function formatarPeriodoEvento(dataInicio: string, dataFim: string): stri
     inicio.getDate() === fim.getDate();
   if (mesmoDia) return formatarDataEvento(dataInicio);
   return `${formatarDataEvento(dataInicio)} a ${formatarDataEvento(dataFim)}`;
+}
+
+export function eventoJaComecou(dataInicio: string): boolean {
+  return new Date(dataInicio).getTime() <= Date.now();
+}
+
+// Selo de destaque a exibir no card do evento — esgotado tem prioridade
+// sobre "já começou" por ser a informação mais acionável para quem compra.
+export function seloEvento(evento: Pick<Evento, "dataInicio" | "esgotado">): string | null {
+  if (evento.esgotado) return "Esgotado";
+  if (eventoJaComecou(evento.dataInicio)) return "Já começou";
+  return null;
 }
 
 export function formatarDataHoraSessao(iso: string): string {

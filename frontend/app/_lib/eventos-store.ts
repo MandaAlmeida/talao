@@ -50,6 +50,7 @@ type EventoBackend = {
   usaMapaAssentos: boolean;
   organizadorId: string;
   sessoes: SessaoBackend[];
+  esgotado?: boolean;
 };
 
 type EventoComMetricasBackend = Omit<EventoBackend, "sessoes"> & {
@@ -180,6 +181,7 @@ function eventoParaFrontend(evento: EventoBackend): Evento {
     usaMapaAssentos: evento.usaMapaAssentos,
     organizadorId: evento.organizadorId,
     sessoes: evento.sessoes.map(sessaoParaFrontend),
+    esgotado: evento.esgotado ?? false,
   };
 }
 
