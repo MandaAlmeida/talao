@@ -1,20 +1,34 @@
 import { Test } from '@nestjs/testing';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, OrderStatus } from '@prisma/client';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
   let prisma: {
-    booking: { findUnique: jest.Mock; update: jest.Mock };
+    booking: {
+      findUnique: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+      findMany: jest.Mock;
+    };
     seat: { updateMany: jest.Mock };
+    order: { findUnique: jest.Mock; update: jest.Mock };
   };
 
   beforeEach(async () => {
     prisma = {
-      booking: { findUnique: jest.fn(), update: jest.fn() },
+      booking: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn(),
+      },
       seat: { updateMany: jest.fn() },
+      order: { findUnique: jest.fn(), update: jest.fn() },
     };
+    // Fluxo legado por padrão: nenhuma Order associada ao PaymentIntent.
+    prisma.order.findUnique.mockResolvedValue(null);
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -84,5 +98,70 @@ describe('PaymentsService', () => {
       data: { object: {} },
     } as never);
     expect(prisma.booking.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('confirms all bookings of an Order when its PaymentIntent succeeds', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.PENDENTE,
+    });
+
+    await service.processarEvento({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_order' } },
+    } as never);
+
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 'order-1' },
+      data: { status: OrderStatus.CONFIRMADO },
+    });
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: { orderId: 'order-1' },
+      data: { status: BookingStatus.CONFIRMADO },
+    });
+    expect(prisma.booking.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent: does nothing if the Order is no longer PENDENTE', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.CONFIRMADO,
+    });
+
+    await service.processarEvento({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_order' } },
+    } as never);
+
+    expect(prisma.order.update).not.toHaveBeenCalled();
+  });
+
+  it('cancels all bookings and frees seats of an Order when its PaymentIntent fails', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      status: OrderStatus.PENDENTE,
+    });
+    prisma.booking.findMany.mockResolvedValue([
+      { id: 'booking-1' },
+      { id: 'booking-2' },
+    ]);
+
+    await service.processarEvento({
+      type: 'payment_intent.payment_failed',
+      data: { object: { id: 'pi_order' } },
+    } as never);
+
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 'order-1' },
+      data: { status: OrderStatus.CANCELADO },
+    });
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: { orderId: 'order-1' },
+      data: { status: BookingStatus.CANCELADO },
+    });
+    expect(prisma.seat.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: { in: ['booking-1', 'booking-2'] } },
+      data: { bookingId: null },
+    });
   });
 });

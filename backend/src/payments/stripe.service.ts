@@ -21,9 +21,10 @@ export class StripeService {
     return { id: intent.id, clientSecret: intent.client_secret! };
   }
 
-  async criarReembolso(paymentIntentId: string) {
+  async criarReembolso(paymentIntentId: string, amountCentavos?: number) {
     const reembolso = await this.client.refunds.create({
       payment_intent: paymentIntentId,
+      ...(amountCentavos !== undefined ? { amount: amountCentavos } : {}),
     });
     return { id: reembolso.id, status: reembolso.status };
   }

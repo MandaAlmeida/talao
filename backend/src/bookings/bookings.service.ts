@@ -267,7 +267,17 @@ export class BookingsService {
       );
     }
 
-    if (booking.stripePaymentIntentId) {
+    if (booking.orderId) {
+      const order = await this.prisma.order.findUnique({
+        where: { id: booking.orderId },
+      });
+      if (order?.stripePaymentIntentId) {
+        await this.stripe.criarReembolso(
+          order.stripePaymentIntentId,
+          booking.valorCentavos,
+        );
+      }
+    } else if (booking.stripePaymentIntentId) {
       await this.stripe.criarReembolso(booking.stripePaymentIntentId);
     }
 

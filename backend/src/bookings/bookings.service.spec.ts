@@ -17,6 +17,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
     $transaction: jest.Mock;
     booking: { update: jest.Mock; findUnique: jest.Mock };
     seat: { updateMany: jest.Mock };
+    order: { findUnique: jest.Mock };
   };
   let tx: {
     ticketType: { findUnique: jest.Mock };
@@ -44,6 +45,7 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         findUnique: jest.fn(),
       },
       seat: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      order: { findUnique: jest.fn() },
     };
     stripeMock = {
       criarPaymentIntent: jest
@@ -437,6 +439,26 @@ describe('BookingsService (unit, mocked Prisma)', () => {
         where: { id: 'booking-1' },
         data: { status: BookingStatus.CANCELADO },
       });
+    });
+
+    it('refunds only the item value when the booking belongs to an Order', async () => {
+      prisma.booking.findUnique.mockResolvedValue({
+        id: 'booking-1',
+        clienteId: 'cliente-1',
+        status: BookingStatus.CONFIRMADO,
+        stripePaymentIntentId: null,
+        orderId: 'order-1',
+        valorCentavos: 1500,
+        sessao: { dataHora: amanha },
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        stripePaymentIntentId: 'pi_order',
+      });
+
+      await service.cancelar('booking-1', 'cliente-1');
+
+      expect(stripeMock.criarReembolso).toHaveBeenCalledWith('pi_order', 1500);
     });
   });
 });
